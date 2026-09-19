@@ -97,17 +97,23 @@ label input{margin-top:4px}
 #tabs button.on{color:var(--accent)}
 
 /* 全螢幕播放畫面 */
-#np{position:fixed;inset:0;height:100dvh;z-index:10;display:flex;flex-direction:column;align-items:center;overflow-y:auto;
+#np{position:fixed;inset:0;height:100dvh;z-index:10;overflow-x:hidden;display:flex;flex-direction:column;align-items:center;overflow-y:auto;
   padding:calc(env(safe-area-inset-top) + 6px) 28px calc(env(safe-area-inset-bottom) + 24px);background:var(--bg);color:var(--fg)}
 #np>*{width:100%;max-width:420px;flex:none}
 .np-top{display:flex;justify-content:center;height:44px;position:relative;z-index:3}
 .np-top .icon-btn{font-size:26px;color:var(--muted-fg);min-width:88px;height:44px}
 .np-meta{position:relative;z-index:2}
 .np-art{flex:1 1 0!important;min-height:150px;display:flex;align-items:center;justify-content:center;padding:6px 0 18px;container-type:size}
-.cover{position:relative;flex:none;width:min(100%,38vh);width:min(100%,38dvh);width:min(100cqw,100cqh);aspect-ratio:1;transform-origin:0 0}
-.disc{width:100%;height:100%;overflow:hidden;background:var(--muted)}
-.disc.ghost{position:absolute;inset:0}
-.disc img{width:100%;height:100%;object-fit:cover;display:block}
+.cover{position:relative;flex:none;width:min(80%,38vh);width:min(80%,38dvh);width:min(80cqw,100cqh);aspect-ratio:1;transform-origin:0 0}
+.cover{--gap:14px;touch-action:pan-y}
+.strip{position:absolute;inset:0;will-change:transform}
+.disc{position:absolute;top:0;width:100%;height:100%;left:calc(var(--k) * (100% + var(--gap)))}
+.plate{width:100%;height:100%;will-change:transform,opacity;transition:transform .46s cubic-bezier(.32,.72,0,1),opacity .46s ease}
+.disc:not([data-k="0"]) .plate{transform:scale(.88);opacity:.5}
+.np-opening .disc:not([data-k="0"]) .plate,.np-closing .disc:not([data-k="0"]) .plate{opacity:0;transition:none}
+.spin{width:100%;height:100%;overflow:hidden;background:var(--muted)}
+.spin img{width:100%;height:100%;object-fit:cover;display:block;-webkit-user-drag:none;user-select:none;pointer-events:none}
+@media (prefers-reduced-motion:reduce){.plate{transition:none}}
 #npTitle{font-weight:700;font-size:20px;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 #npSub{color:var(--muted-fg);font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
 .np-seek{margin-top:18px}
@@ -162,7 +168,7 @@ dialog#sheet::backdrop{background:rgba(0,0,0,.5)}
   --trk-on:#fff;--trk-off:rgba(255,255,255,.26);--trk-h:7px;--th:7px;--th-bg:transparent;
   --glass:rgba(44,44,54,.52);--glass-edge:inset 0 1px 0 rgba(255,255,255,.24),inset 0 0 0 .5px rgba(255,255,255,.14),0 12px 32px rgba(0,0,0,.4)}
 [data-theme=glass] #ambient{display:block;background:radial-gradient(at 12% 0,#6b1d3a,transparent 60%),radial-gradient(at 100% 25%,#1f3263,transparent 55%),#0b0b0f}
-[data-theme=glass] #ambient::before{content:"";position:absolute;inset:-80px;background:var(--art,none) center/cover;filter:blur(70px) saturate(1.6);opacity:.55}
+[data-theme=glass] #ambient::before{content:"";position:absolute;left:50%;top:50%;width:160px;height:160px;margin:-80px;background:var(--art,none) center/cover;filter:blur(11px) saturate(1.6);transform:scale(7.5);opacity:.55}
 [data-theme=glass] #ambient::after{content:"";position:absolute;inset:0;background:linear-gradient(rgba(11,11,15,.35),rgba(11,11,15,.82) 55%)}
 [data-theme=glass] body{background:#0b0b0f}
 [data-theme=glass] #topbar::before{content:"";position:absolute;inset:0 0 -18px;z-index:-1;pointer-events:none;
@@ -189,9 +195,10 @@ dialog#sheet::backdrop{background:rgba(0,0,0,.5)}
 [data-theme=glass] #tabs button{height:50px;border-radius:999px}
 [data-theme=glass] #tabs button.on{background:rgba(255,255,255,.14);box-shadow:inset 0 1px 0 rgba(255,255,255,.2)}
 [data-theme=glass] #np{background:#0b0b0f;isolation:isolate}
-[data-theme=glass] #np::before{content:"";position:fixed;inset:-100px;z-index:-1;background:var(--art,none) center/cover;filter:blur(80px) saturate(1.8);opacity:.75}
+[data-theme=glass] #np::before{content:"";position:fixed;left:50%;top:50%;width:160px;height:160px;margin:-80px;z-index:-1;background:var(--art,none) center/cover;filter:blur(12px) saturate(1.8);transform:scale(7.5);opacity:.75}
 [data-theme=glass] #np::after{content:"";position:fixed;inset:0;z-index:-1;background:linear-gradient(rgba(11,11,15,.25),rgba(11,11,15,.7))}
-[data-theme=glass] .disc{border-radius:16px;box-shadow:0 24px 60px rgba(0,0,0,.55)}
+[data-theme=glass] .plate{border-radius:16px;box-shadow:0 22px 50px rgba(0,0,0,.5)}
+[data-theme=glass] .spin{border-radius:16px}
 [data-theme=glass] .np-ctl .hero{font-size:46px}
 [data-theme=glass] dialog#sheet{-webkit-backdrop-filter:blur(36px) saturate(180%);backdrop-filter:blur(36px) saturate(180%);border-radius:28px;box-shadow:var(--glass-edge)}
 [data-theme=glass] #toast{background:rgba(255,255,255,.92);color:#0b0b0f}
@@ -240,7 +247,9 @@ dialog#sheet::backdrop{background:rgba(0,0,0,.5)}
 [data-theme=pop] #tabs button.on{color:var(--ink)}
 [data-theme=pop] #tabs button.on .ic{background:var(--pink);color:#fff;border:2px solid var(--ink);border-radius:999px;width:52px;height:28px;padding:3px 0;box-shadow:2px 2px 0 var(--ink)}
 [data-theme=pop] #np{background:radial-gradient(#BFE2FF 1.6px,transparent 1.7px) 0 0/18px 18px,#DFF1FF}
-[data-theme=pop] .disc{border:3px solid var(--ink);border-radius:26px;box-shadow:9px 9px 0 var(--pink);rotate:-2deg}
+[data-theme=pop] .spin{border:3px solid var(--ink);border-radius:26px;box-shadow:9px 9px 0 var(--pink);transform:rotate(-2deg);transition:transform .46s cubic-bezier(.32,.72,0,1)}
+[data-theme=pop] .disc[data-k="-1"] .spin{transform:rotate(4deg);box-shadow:9px 9px 0 var(--mint)}
+[data-theme=pop] .disc[data-k="1"] .spin{transform:rotate(3deg);box-shadow:9px 9px 0 var(--yellow)}
 [data-theme=pop] .np-ctl .hero{background:var(--yellow);border:3px solid var(--ink);box-shadow:4px 4px 0 var(--ink);font-size:36px}
 [data-theme=pop] .np-top .icon-btn{color:var(--ink)}
 [data-theme=pop] dialog#sheet{box-shadow:6px 6px 0 var(--ink)}
@@ -284,18 +293,19 @@ dialog#sheet::backdrop{background:rgba(0,0,0,.5)}
 [data-theme=vinyl] #tabs button{position:relative}
 [data-theme=vinyl] #tabs button.on::before{content:"";position:absolute;top:0;left:50%;width:22px;height:3px;margin-left:-11px;border-radius:0 0 3px 3px;background:var(--accent)}
 [data-theme=vinyl] #np{background:radial-gradient(90% 50% at 50% 28%,#4a2c16,transparent 75%),#15110e}
-[data-theme=vinyl] .disc{border-radius:50%;position:relative;background:var(--groove);box-shadow:0 0 0 2px #0c0a08,0 26px 60px rgba(0,0,0,.6)}
-[data-theme=vinyl] .disc img{position:absolute;left:28%;top:28%;width:44%;height:44%;border-radius:50%;box-shadow:0 0 0 4px #0c0a08}
-[data-theme=vinyl] .disc::after{content:"";position:absolute;left:50%;top:50%;width:12px;height:12px;margin:-6px;border-radius:50%;background:#15110e;box-shadow:0 0 0 2px #0c0a08}
-[data-theme=vinyl] .cover::after{content:"";position:absolute;inset:0;border-radius:50%;pointer-events:none;mix-blend-mode:screen;
+[data-theme=vinyl] .plate{border-radius:50%;box-shadow:0 0 0 2px #0c0a08,0 24px 50px rgba(0,0,0,.55)}
+[data-theme=vinyl] .spin{border-radius:50%;position:relative;background:var(--groove);will-change:transform}
+[data-theme=vinyl] .spin img{position:absolute;left:28%;top:28%;width:44%;height:44%;border-radius:50%;box-shadow:0 0 0 4px #0c0a08}
+[data-theme=vinyl] .spin::after{content:"";position:absolute;left:50%;top:50%;width:12px;height:12px;margin:-6px;border-radius:50%;background:#15110e;box-shadow:0 0 0 2px #0c0a08}
+[data-theme=vinyl] .cover::after{content:"";position:absolute;inset:0;border-radius:50%;pointer-events:none;
   background:conic-gradient(from 20deg,transparent 0 35deg,rgba(255,240,220,.13) 55deg,transparent 80deg 200deg,rgba(255,240,220,.10) 225deg,transparent 255deg)}
-[data-theme=vinyl] .disc:not(.ghost),[data-theme=vinyl] #pArt{animation:spin 10s linear infinite;animation-play-state:paused}
-[data-theme=vinyl] .playing .disc:not(.ghost),[data-theme=vinyl] .playing #pArt{animation-play-state:running}
+[data-theme=vinyl] .spin,[data-theme=vinyl] #pArt{animation:spin 10s linear infinite;animation-play-state:paused}
+[data-theme=vinyl] .playing .disc[data-k="0"] .spin,[data-theme=vinyl] .playing #pArt{animation-play-state:running}
 [data-theme=vinyl] .np-ctl .hero{background:var(--accent);color:var(--accent-fg);font-size:34px}
 [data-theme=vinyl] #npTitle{font-size:22px;font-weight:800}
 [data-theme=vinyl] dialog#sheet{box-shadow:0 24px 60px rgba(0,0,0,.6)}
-@keyframes spin{to{rotate:360deg}}
-@media (prefers-reduced-motion:reduce){[data-theme=vinyl] .disc,[data-theme=vinyl] #pArt{animation:none!important}}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){[data-theme=vinyl] .spin,[data-theme=vinyl] #pArt{animation:none!important}}
 
 /* 收尾：清單列三顆動作鈕收窄讓副標不被擠；隱藏內容區捲軸 */
 .numbered .item{gap:9px}

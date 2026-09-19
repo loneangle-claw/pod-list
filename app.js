@@ -30,6 +30,7 @@ const IC = {
   search: '<circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.4 15.4L20 20"/>',
   list: '<path d="M4 6.5h12M4 12h9M4 17.5h6"/><path class="f" d="M15.5 13.2v6.1a.6.6 0 0 0 .92.5l4.6-3.05a.6.6 0 0 0 0-1L16.42 12.7a.6.6 0 0 0-.92.5z"/>',
   sliders: '<path d="M4 7.5h9M18.5 7.5H20M4 16.5h1.5M11 16.5h9"/><circle cx="15.8" cy="7.5" r="2.4"/><circle cx="8.2" cy="16.5" r="2.4"/>',
+  sort: '<path d="M7 4.5v15M3.5 16L7 19.5l3.5-3.5M17 19.5v-15M13.5 8L17 4.5 20.5 8"/>',
   chevLeft: '<path d="M14.5 5l-7 7 7 7"/>',
   chevDown: '<path d="M5 9l7 7 7-7"/>',
   plus: '<path d="M12 5v14M5 12h14"/>',
@@ -65,7 +66,7 @@ function toast(msg) {
 }
 
 /* ---------- 資料 ---------- */
-const BUILD = '8';
+const BUILD = '9';
 const emptyData = () => ({ version: 1, updatedAt: 0, shows: [], lists: [] });
 const key = x => String(x && x.id);
 function uniq(arr) {                    // 依 id 去重，保留先出現的
@@ -241,9 +242,19 @@ function renderShowHead() {
     h('div', {}, h('div', { class: 't' }, s.name), h('div', { class: 's' }, s.artist),
       h('button', { class: 'btn sm', onclick: toggle }, icon(fav ? 'starFill' : 'star'), fav ? '已加入我的節目' : '加入我的節目')));
 }
-function visibleEpisodes() {            // 篩選後的單集，也是「全部加入」與播放佇列的範圍
+const byDate = dir => (a, b) => dir * ((Date.parse(a.date) || 0) - (Date.parse(b.date) || 0));
+let sortDir = localStorage.getItem('podlist.sort') === 'asc' ? 1 : -1;   // -1 新→舊（預設）、1 舊→新
+function paintSort() { $('#btnSort').replaceChildren(icon('sort'), sortDir < 0 ? '新→舊' : '舊→新'); }
+$('#btnSort').onclick = () => {
+  sortDir = -sortDir;
+  localStorage.setItem('podlist.sort', sortDir > 0 ? 'asc' : 'desc');
+  paintSort(); renderEpisodes();
+};
+paintSort();
+function visibleEpisodes() {            // 篩選＋排序後的單集，也是「全部加入」與播放佇列的範圍
   const kw = $('#epFilter').value.trim().toLowerCase();
-  return kw ? curEpisodes.filter(e => e.title.toLowerCase().includes(kw)) : curEpisodes;
+  const eps = kw ? curEpisodes.filter(e => e.title.toLowerCase().includes(kw)) : curEpisodes.slice();
+  return eps.sort(byDate(sortDir));
 }
 function renderEpisodes() {
   const eps = visibleEpisodes();
@@ -312,6 +323,15 @@ $('#btnRename').onclick = () => openSheet('清單改名', body => {
   body.append(inp, h('div', { class: 'row', style: 'margin:12px 0 0' },
     h('button', { class: 'btn primary', onclick: ok }, '確定'), h('button', { class: 'btn', onclick: closeSheet }, '取消')));
 });
+$('#btnSortList').onclick = () => openSheet('依發布時間重新排序', body => {
+  const apply = dir => () => {
+    getList(curListId).items.sort(byDate(dir));
+    commit(); closeSheet(); renderListItems();
+    toast(dir < 0 ? '已排成 新→舊' : '已排成 舊→新');
+  };
+  body.append(h('button', { class: 'opt', onclick: apply(-1) }, '新 → 舊', h('small', {}, '最新的在最上面')),
+              h('button', { class: 'opt', onclick: apply(1) }, '舊 → 新', h('small', {}, '從第一集開始聽')));
+});
 $('#btnClearList').onclick = () => openSheet('清空這個清單的單集？', body => {
   const clear = () => { getList(curListId).items = []; commit(); closeSheet(); renderListItems(); };
   body.append(h('div', { class: 'row', style: 'margin:0' },
@@ -363,13 +383,36 @@ function openSheet(title, build) {
 function closeSheet() { $('#sheet').close(); }
 $('#sheet').addEventListener('click', e => { if (e.target === $('#sheet')) closeSheet(); });
 
-/* ---------- 動態：播放畫面展開／收合、切歌封面轉場 ----------
-   全用 WAAPI，隨時可被下一個動作打斷；系統開了「減少動態效果」就全部直接切。 */
+/* ---------- 動態：播放畫面展開／收合、封面列換首 ----------
+   封面是一列三格（上一集／目前／下一集），換首＝整列滑一格並輪轉三個節點的角色；
+   下一張圖早就載好擺在旁邊，所以換首當下不載圖、不複製節點，只動 transform。
+   全用 WAAPI／CSS transition，可被打斷；系統開「減少動態效果」就直接切。 */
 const EASE = 'cubic-bezier(.32,.72,0,1)';
+const GAP = 14;                          // 要與 style.css 的 --gap 一致
 const calm = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 const NP_REST = ['.np-top', '.np-meta', '.np-seek', '.np-ctl', '.np-extra'];
-let coverDir = 1;
-function stopNP() { $('#np').getAnimations({ subtree: true }).forEach(a => a.cancel()); }
+let coverDir = 0, dragDx = 0;
+const slots = [...document.querySelectorAll('#npCover .disc')];
+const slotOf = k => slots.find(n => n.dataset.k === String(k));
+const setK = (n, k) => { n.dataset.k = k; n.style.setProperty('--k', k); };
+function fillSlot(n, ep) {
+  const img = n.querySelector('img'), src = ep ? bigArt(ep.art) : '';
+  n.style.visibility = ep ? '' : 'hidden';
+  if (src && img.getAttribute('src') !== src) img.src = src;
+}
+function renderSlots() { [-1, 0, 1].forEach(k => fillSlot(slotOf(k), queue[qi + k])); }
+function coverTo(d) {                    // d：+1 下一集、-1 上一集、0 非相鄰（直接換）
+  const strip = $('#npStrip'), from = dragDx;
+  dragDx = 0; strip.style.transform = '';
+  strip.getAnimations().forEach(a => a.cancel());
+  if (!d || $('#np').hidden || calm()) { renderSlots(); return; }
+  const gone = slotOf(-d), was = slotOf(0), now = slotOf(d);
+  setK(was, -d); setK(now, 0); setK(gone, d);          // 角色輪轉；離場那格繞到另一側待命
+  fillSlot(now, queue[qi]); fillSlot(was, queue[qi - d]); fillSlot(gone, queue[qi + d]);
+  const W = $('#npCover').offsetWidth + GAP;
+  strip.animate([{ transform: `translateX(${d * W + from}px)` }, { transform: 'translateX(0)' }], { duration: 460, easing: EASE });
+}
+function stopNP() { NP_REST.concat('#npCover').forEach(sel => $(sel).getAnimations().forEach(a => a.cancel())); $('#np').getAnimations().forEach(a => a.cancel()); }
 function miniToCover() {                 // 迷你列封面 → 大封面的位移與縮放（.cover 的 transform-origin 是左上角）
   const a = $('#pArt').getBoundingClientRect(), b = $('#npCover').getBoundingClientRect();
   return `translate(${a.left - b.left}px,${a.top - b.top}px) scale(${a.width / b.width})`;
@@ -377,11 +420,13 @@ function miniToCover() {                 // 迷你列封面 → 大封面的位�
 function openNP() {
   const np = $('#np');
   if (!np.hidden) return;
-  np.hidden = false;
+  np.hidden = false; renderSlots();
   if (calm()) return;
   stopNP();
+  np.classList.remove('np-closing'); np.classList.add('np-opening');   // 飛行途中先藏起兩側封面
   np.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 220, easing: 'ease-out' });
-  $('#npCover').animate([{ transform: miniToCover() }, { transform: 'none' }], { duration: 500, easing: EASE });
+  $('#npCover').animate([{ transform: miniToCover() }, { transform: 'none' }], { duration: 500, easing: EASE })
+    .finished.catch(() => {}).then(() => np.classList.remove('np-opening'));
   NP_REST.forEach((sel, i) => $(sel).animate(
     [{ opacity: 0, transform: 'translateY(30px)' }, { opacity: 1, transform: 'none' }],
     { duration: 440, delay: 70 + i * 40, easing: EASE, fill: 'backwards' }));
@@ -391,40 +436,48 @@ function closeNP() {
   if (np.hidden) return;
   if (calm()) { np.hidden = true; return; }
   stopNP();
+  np.classList.remove('np-opening'); np.classList.add('np-closing');
   $('#npCover').animate([{ transform: 'none' }, { transform: miniToCover() }], { duration: 400, easing: EASE, fill: 'forwards' });
   NP_REST.forEach(sel => $(sel).animate([{ opacity: 1 }, { opacity: 0 }], { duration: 160, fill: 'forwards' }));
   const fade = np.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 260, delay: 140, easing: 'ease-in', fill: 'forwards' });
-  fade.finished.then(() => { np.hidden = true; stopNP(); }).catch(() => {});
-}
-function swapCover(src) {                // 舊封面往反方向滑出，新封面從行進方向滑入
-  const img = $('#npArt'), cover = $('#npCover'), disc = cover.querySelector('.disc:not(.ghost)');
-  const d = coverDir;
-  if (!calm()) $('#pArt').animate([{ opacity: 0, transform: 'scale(.7)' }, { opacity: 1, transform: 'none' }], { duration: 320, easing: EASE });
-  if ($('#np').hidden || calm() || !img.getAttribute('src') || img.getAttribute('src') === src) { img.src = src; return; }
-  const ghost = disc.cloneNode(true);
-  ghost.classList.add('ghost'); ghost.querySelector('img').removeAttribute('id');
-  cover.append(ghost);
-  let started = false;
-  const go = () => {
-    if (started) return;
-    started = true; img.src = src;
-    ghost.animate([{ transform: 'none', opacity: 1 }, { transform: `translateX(${-52 * d}%) scale(.8)`, opacity: 0 }],
-      { duration: 420, easing: EASE, fill: 'forwards' }).finished.catch(() => {}).then(() => ghost.remove());
-    disc.animate([{ transform: `translateX(${52 * d}%) scale(.8)`, opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 480, easing: EASE });
-    $('.np-meta').animate([{ opacity: 0, transform: `translateX(${18 * d}px)` }, { opacity: 1, transform: 'none' }], { duration: 380, easing: EASE });
-  };
-  const pre = new Image();               // 先把新圖解碼好再動，避免滑進來的是空白
-  pre.src = src;
-  (pre.decode ? pre.decode() : Promise.reject()).then(go, go);
-  setTimeout(go, 700);
+  fade.finished.then(() => { np.hidden = true; np.classList.remove('np-closing'); stopNP(); }).catch(() => {});
 }
 
-// 播放畫面：往下滑一段就收合（進度條上的拖曳不算）
+// 手勢：封面左右拖＝換首（跟手，放開看距離或速度決定）；播放畫面往下滑＝收合
 {
-  let y0 = null;
-  const np = $('#np');
-  np.addEventListener('touchstart', e => { y0 = e.target.closest('#seek') || np.scrollTop > 0 ? null : e.touches[0].clientY; }, { passive: true });
-  np.addEventListener('touchend', e => { if (y0 != null && e.changedTouches[0].clientY - y0 > 80) closeNP(); y0 = null; }, { passive: true });
+  const np = $('#np'), cover = $('#npCover'), strip = $('#npStrip');
+  let x0 = 0, y0 = 0, t0 = 0, axis = null, onCover = false;
+  np.addEventListener('touchstart', e => {
+    const t = e.touches[0];
+    x0 = t.clientX; y0 = t.clientY; t0 = e.timeStamp; axis = null;
+    onCover = !!e.target.closest('#npCover');
+    if (e.target.closest('#seek') || np.scrollTop > 0) axis = 'none';
+    if (onCover) strip.getAnimations().forEach(a => a.finish());
+  }, { passive: true });
+  np.addEventListener('touchmove', e => {
+    const t = e.touches[0], dx = t.clientX - x0, dy = t.clientY - y0;
+    if (!axis) {
+      if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+      axis = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
+    }
+    if (axis !== 'x' || !onCover) return;
+    const blocked = dx < 0 ? !queue[qi + 1] : !queue[qi - 1];        // 到頭了就給阻力
+    dragDx = blocked ? dx * .25 : dx;
+    strip.style.transform = `translateX(${dragDx}px)`;
+  }, { passive: true });
+  np.addEventListener('touchend', e => {
+    const t = e.changedTouches[0];
+    if (axis === 'y' && t.clientY - y0 > 80) closeNP();
+    if (axis === 'x' && onCover) {
+      const dx = dragDx, d = dx < 0 ? 1 : -1, v = Math.abs(dx) / Math.max(1, e.timeStamp - t0);
+      if (queue[qi + d] && (Math.abs(dx) > cover.offsetWidth * .22 || v > .45)) step(d);   // step → loadEp → coverTo 會接手 dragDx
+      else {
+        dragDx = 0; strip.style.transform = '';
+        if (dx && !calm()) strip.animate([{ transform: `translateX(${dx}px)` }, { transform: 'translateX(0)' }], { duration: 320, easing: EASE });
+      }
+    }
+    axis = null;
+  }, { passive: true });
 }
 
 /* ---------- 播放器（迷你列 + 全螢幕播放畫面） ---------- */
@@ -449,8 +502,13 @@ function loadEp(autoplay) {
   if (!e) return;
   $('#player').hidden = false;
   $('#pArt').src = e.art; $('#pTitle').textContent = e.title; $('#pSub').textContent = e.show;
-  swapCover(bigArt(e.art)); $('#npTitle').textContent = e.title; $('#npSub').textContent = e.show;
-  document.documentElement.style.setProperty('--art', `url("${bigArt(e.art).replace(/["\\]/g, '')}")`);
+  const d = coverDir, moving = d && !$('#np').hidden && !calm();
+  coverDir = 0; coverTo(d);
+  $('#npTitle').textContent = e.title; $('#npSub').textContent = e.show;
+  if (moving) $('.np-meta').animate([{ opacity: 0 }, { opacity: 1 }], { duration: 300, easing: 'ease-out' });
+  if (!calm()) $('#pArt').animate([{ opacity: 0 }, { opacity: 1 }], { duration: 260, easing: 'ease-out' });
+  const art = `url("${e.art.replace(/["\\]/g, '')}")`;               // 背景光用小圖就夠（反正會被模糊）
+  setTimeout(() => { if (nowEp() === e) document.documentElement.style.setProperty('--art', art); }, moving ? 520 : 0);
   $('#pRate').textContent = rate + '×';
   audio.src = e.url;
   const p = pos[e.id] || 0;
@@ -465,7 +523,7 @@ function loadEp(autoplay) {
 function playQueue(q, i, restart) {
   if (i < 0 || !q[i]) return;
   const same = !restart && nowEp() && nowEp().id === q[i].id;
-  queue = q.slice(); qi = i; coverDir = 1;
+  queue = q.slice(); qi = i; coverDir = 0;
   if (same) { audio.paused ? audio.play() : audio.pause(); jset(LS_LAST, { queue, qi }); return; }
   savePos(); loadEp(true);
 }

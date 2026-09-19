@@ -16,7 +16,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&display=swap">
-<link rel="stylesheet" href="style.css?v=8">
+<link rel="stylesheet" href="style.css?v=9">
 </head>
 <body>
 <div id="ambient" aria-hidden="true"></div>
@@ -49,6 +49,7 @@
     <div id="showHead" class="show-head"></div>
     <div class="row">
       <input id="epFilter" type="search" placeholder="篩選單集標題…" autocomplete="off">
+      <button id="btnSort" class="btn" aria-label="切換時間排序"></button>
       <button id="btnAddAll" class="btn primary"></button>
     </div>
     <div id="episodes" class="list"></div>
@@ -65,6 +66,7 @@
   <section id="view-list" class="view" hidden>
     <div class="row wrap">
       <button id="btnPlayAll" class="btn primary" data-ic="play">全部播放</button>
+      <button id="btnSortList" class="btn" data-ic="sort">依時間排序</button>
       <button id="btnRename" class="btn">改名</button>
       <button id="btnClearList" class="btn">清空</button>
       <button id="btnDelList" class="btn danger">刪除清單</button>
@@ -123,7 +125,7 @@
 
 <section id="np" hidden aria-label="正在播放">
   <div class="np-top"><button id="npClose" class="icon-btn" data-ic="chevDown" aria-label="收合"></button></div>
-  <div class="np-art"><div class="cover" id="npCover"><div class="disc"><img id="npArt" alt=""></div></div></div>
+  <div class="np-art"><div class="cover" id="npCover"><div class="strip" id="npStrip"><div class="disc" data-k="-1" style="--k:-1"><div class="plate"><div class="spin"><img alt=""></div></div></div><div class="disc" data-k="0" style="--k:0"><div class="plate"><div class="spin"><img alt=""></div></div></div><div class="disc" data-k="1" style="--k:1"><div class="plate"><div class="spin"><img alt=""></div></div></div></div></div></div>
   <div class="np-meta"><div id="npTitle"></div><div id="npSub"></div></div>
   <div class="np-seek">
     <input id="seek" type="range" min="0" max="1000" value="0" step="1" aria-label="播放進度">
@@ -145,6 +147,6 @@
 <dialog id="sheet"><div id="sheetBody"></div></dialog>
 <div id="toast" hidden></div>
 <audio id="audio" preload="metadata"></audio>
-<script src="app.js?v=8"></script>
+<script src="app.js?v=9"></script>
 </body>
 </html>
