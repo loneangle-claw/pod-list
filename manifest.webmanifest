@@ -1,0 +1,17 @@
+{
+  "name": "POD·LIST 我的 Podcast 清單",
+  "short_name": "POD·LIST",
+  "description": "搜尋 Apple Podcast、把單集收進自己的播放清單，清單同步到 GitHub",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#101418",
+  "theme_color": "#101418",
+  "lang": "zh-Hant",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

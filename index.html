@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#101418">
+<title>POD·LIST 我的 Podcast 清單</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header id="topbar">
+  <button id="btnBack" class="icon-btn" hidden aria-label="返回">‹</button>
+  <h1 id="title">POD·LIST</h1>
+  <span id="syncBadge" class="badge" title="同步狀態">本機</span>
+</header>
+
+<main id="main">
+  <section id="view-search" class="view">
+    <form id="searchForm" class="row">
+      <input id="q" type="search" placeholder="搜尋 Apple Podcast 節目…" autocomplete="off" enterkeyhint="search">
+      <select id="country" aria-label="地區">
+        <option value="TW">台灣</option><option value="US">美國</option><option value="JP">日本</option>
+        <option value="HK">香港</option><option value="CN">中國</option><option value="GB">英國</option><option value="VN">越南</option>
+      </select>
+      <button class="btn primary" type="submit">搜尋</button>
+    </form>
+    <div id="myShowsWrap" hidden>
+      <h2 class="sec">我的節目</h2>
+      <div id="myShows" class="chips"></div>
+    </div>
+    <h2 class="sec" id="resultHead" hidden>搜尋結果</h2>
+    <div id="results" class="list"></div>
+  </section>
+
+  <section id="view-show" class="view" hidden>
+    <div id="showHead" class="show-head"></div>
+    <input id="epFilter" type="search" placeholder="在本節目內篩選單集標題…" autocomplete="off">
+    <div id="episodes" class="list"></div>
+  </section>
+
+  <section id="view-lists" class="view" hidden>
+    <div class="row">
+      <input id="newListName" type="text" placeholder="新清單名稱" maxlength="40">
+      <button id="btnNewList" class="btn primary">建立</button>
+    </div>
+    <div id="lists" class="list"></div>
+  </section>
+
+  <section id="view-list" class="view" hidden>
+    <div class="row wrap">
+      <button id="btnPlayAll" class="btn primary">▶ 全部播放</button>
+      <button id="btnRename" class="btn">改名</button>
+      <button id="btnDelList" class="btn danger">刪除清單</button>
+    </div>
+    <div id="listItems" class="list"></div>
+  </section>
+
+  <section id="view-settings" class="view" hidden>
+    <h2 class="sec">GitHub 同步</h2>
+    <p class="hint">清單會存成 repo 裡的一個 JSON 檔，換裝置填同一組設定就同步。Token 只存在這台裝置的瀏覽器，不會寫進 repo。</p>
+    <label>擁有者 (owner)<input id="ghOwner" type="text" autocapitalize="off" spellcheck="false"></label>
+    <label>Repo<input id="ghRepo" type="text" autocapitalize="off" spellcheck="false"></label>
+    <label>分支<input id="ghBranch" type="text" autocapitalize="off" spellcheck="false"></label>
+    <label>檔案路徑<input id="ghPath" type="text" autocapitalize="off" spellcheck="false"></label>
+    <label>Personal Access Token<input id="ghToken" type="password" autocomplete="off" placeholder="github_pat_…"></label>
+    <div class="row wrap">
+      <button id="btnSaveGh" class="btn primary">儲存並同步</button>
+      <button id="btnPull" class="btn">從 GitHub 拉回</button>
+      <button id="btnPush" class="btn">強制上傳本機</button>
+    </div>
+    <p id="ghMsg" class="hint"></p>
+    <h2 class="sec">備份</h2>
+    <div class="row wrap">
+      <button id="btnExport" class="btn">匯出 JSON</button>
+      <button id="btnImport" class="btn">匯入 JSON</button>
+      <input id="fileImport" type="file" accept="application/json,.json" hidden>
+    </div>
+  </section>
+</main>
+
+<div id="player" hidden>
+  <input id="seek" type="range" min="0" max="1000" value="0" step="1" aria-label="播放進度">
+  <div class="p-row">
+    <img id="pArt" alt="">
+    <div class="p-meta"><div id="pTitle"></div><div id="pSub"></div></div>
+  </div>
+  <div class="p-ctl">
+    <span id="pTime">0:00 / 0:00</span>
+    <button id="pPrev" class="icon-btn" aria-label="上一集">⏮</button>
+    <button id="pBack" class="icon-btn" aria-label="倒退15秒">−15</button>
+    <button id="pPlay" class="icon-btn big" aria-label="播放/暫停">▶</button>
+    <button id="pFwd" class="icon-btn" aria-label="快轉30秒">+30</button>
+    <button id="pNext" class="icon-btn" aria-label="下一集">⏭</button>
+    <button id="pRate" class="icon-btn" aria-label="播放速度">1×</button>
+  </div>
+</div>
+
+<nav id="tabs">
+  <button data-tab="search" class="on">🔍<span>搜尋</span></button>
+  <button data-tab="lists">🎧<span>清單</span></button>
+  <button data-tab="settings">⚙️<span>設定</span></button>
+</nav>
+
+<dialog id="sheet"><div id="sheetBody"></div></dialog>
+<div id="toast" hidden></div>
+<audio id="audio" preload="metadata"></audio>
+<script src="app.js"></script>
+</body>
+</html>
