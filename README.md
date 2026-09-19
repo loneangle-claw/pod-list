@@ -8,6 +8,15 @@
 - 播放進度只存本機，不同步
 - 改版記得把 `sw.js` 的 `CACHE` 版號 +1
 
+## 部署
+
+- **GitHub Pages**（目前上線中）：https://loneangle-claw.github.io/pod-list/ ，push 到 `main` 即自動更新
+- **Cloudflare Workers**（備用，設定已備好）：Cloudflare 後台 → Workers & Pages → Create → Import a repository → 選這個 repo，之後 push 一樣自動部署到 `https://pod-list.fbiericlin.workers.dev/`
+  - `wrangler.jsonc` 走純靜態資產（沒有後端，清單同步是前端直接打 GitHub API），只上傳 8 個網站檔，其餘由 `.assetsignore` 排除
+  - `not_found_handling` 刻意設 `none`：本站沒有前端路由，漏檔要誠實回 404，否則會拿到 200 + index.html 被 `sw.js` 的 network-first 寫進快取
+  - index.html／manifest／sw.js 全用相對路徑，所以 Pages 子路徑與 Workers 根目錄都能跑
+  - 本機驗證設定：`npx wrangler deploy --dry-run`
+
 ## 操作
 
 - 節目頁「＋ 全部 N」：把目前列出的單集（有篩選就只加篩選後的）一次加進某個清單，重複的自動略過

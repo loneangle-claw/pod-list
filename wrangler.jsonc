@@ -1,0 +1,15 @@
+{
+  // Cloudflare Workers：純靜態資產（清單同步是前端直接打 GitHub API，沒有後端，所以不需要 main / worker script）。
+  // 上線方式：Cloudflare 後台 → Workers & Pages → Create → Import a repository → 選 loneangle-claw/pod-list
+  // 接上之後每次 git push 會自動部署到 https://pod-list.fbiericlin.workers.dev/
+  // 專案根目錄就是網站根目錄（GitHub Pages 吃同一份），index.html / manifest / sw.js 內全用相對路徑，
+  // 所以放在 Pages 的子路徑 /pod-list/ 或 Workers 的根目錄都能跑。
+  "name": "pod-list",
+  "compatibility_date": "2026-09-01",
+  "assets": {
+    "directory": "./",
+    // 不要用 single-page-application：本站沒有前端路由，讓找不到的檔案誠實回 404，
+    // 否則漏掉的資產會拿到 200 + index.html，被 sw.js 的 network-first 寫進快取。
+    "not_found_handling": "none"
+  }
+}

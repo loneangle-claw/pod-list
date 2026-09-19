@@ -1,0 +1,6 @@
+# 不要上線到 Cloudflare 的檔案（gitignore 語法）
+# ⚠️ 用 .git* 而非 .git/**：Windows 下 wrangler 走訪路徑是反斜線，.git/** 匹配不到 .git\config
+.git*
+.wrangler*
+wrangler.jsonc
+README.md
