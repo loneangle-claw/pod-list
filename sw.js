@@ -1,5 +1,5 @@
 // 只快取 App 外殼；iTunes / GitHub API / 音檔一律走網路
-const CACHE = 'podlist-v2';
+const CACHE = 'podlist-v3';
 const SHELL = ['./', 'index.html', 'style.css', 'app.js', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png'];
 
 self.addEventListener('install', e => {

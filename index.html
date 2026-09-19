@@ -37,7 +37,10 @@
 
   <section id="view-show" class="view" hidden>
     <div id="showHead" class="show-head"></div>
-    <input id="epFilter" type="search" placeholder="在本節目內篩選單集標題…" autocomplete="off">
+    <div class="row">
+      <input id="epFilter" type="search" placeholder="在本節目內篩選單集標題…" autocomplete="off">
+      <button id="btnAddAll" class="btn primary">＋ 全部</button>
+    </div>
     <div id="episodes" class="list"></div>
   </section>
 
@@ -53,6 +56,7 @@
     <div class="row wrap">
       <button id="btnPlayAll" class="btn primary">▶ 全部播放</button>
       <button id="btnRename" class="btn">改名</button>
+      <button id="btnClearList" class="btn">清空</button>
       <button id="btnDelList" class="btn danger">刪除清單</button>
     </div>
     <div id="listItems" class="list"></div>

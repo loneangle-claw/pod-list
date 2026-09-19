@@ -200,13 +200,19 @@ function renderShowHead() {
     h('div', {}, h('div', { class: 't' }, s.name), h('div', { class: 's' }, s.artist),
       h('button', { class: 'btn', onclick: toggle }, fav ? '★ 已加入我的節目' : '☆ 加入我的節目')));
 }
-function renderEpisodes() {
+function visibleEpisodes() {            // 篩選後的單集，也是「全部加入」與播放佇列的範圍
   const kw = $('#epFilter').value.trim().toLowerCase();
-  const eps = kw ? curEpisodes.filter(e => e.title.toLowerCase().includes(kw)) : curEpisodes;
+  return kw ? curEpisodes.filter(e => e.title.toLowerCase().includes(kw)) : curEpisodes;
+}
+function renderEpisodes() {
+  const eps = visibleEpisodes();
   const msg = curEpisodes.length ? '沒有符合的單集' : '這個節目沒有可播放的單集';
+  $('#btnAddAll').textContent = `＋ 全部${eps.length ? ' ' + eps.length : ''}`;
+  $('#btnAddAll').disabled = !eps.length;
   $('#episodes').replaceChildren(...(eps.length ? eps.map(e => epRow(e, { queue: eps })) : [h('div', { class: 'empty' }, msg)]));
 }
 $('#epFilter').oninput = renderEpisodes;
+$('#btnAddAll').onclick = () => { const eps = visibleEpisodes(); if (eps.length) pickList(eps); };
 
 function epRow(e, { queue, listId }) {
   const sub = [listId ? e.show : null, fmtD(e.date), e.ms ? fmtT(e.ms / 1000) : null, pos[e.id] > 5 ? `已聽到 ${fmtT(pos[e.id])}` : null].filter(Boolean).join(' · ');
@@ -260,6 +266,11 @@ $('#btnRename').onclick = () => openSheet('清單改名', body => {
   body.append(inp, h('div', { class: 'row', style: 'margin:12px 0 0' },
     h('button', { class: 'btn primary', onclick: ok }, '確定'), h('button', { class: 'btn', onclick: closeSheet }, '取消')));
 });
+$('#btnClearList').onclick = () => openSheet('清空這個清單的單集？', body => {
+  const clear = () => { getList(curListId).items = []; commit(); closeSheet(); renderListItems(); };
+  body.append(h('div', { class: 'row', style: 'margin:0' },
+    h('button', { class: 'btn danger', onclick: clear }, '清空'), h('button', { class: 'btn', onclick: closeSheet }, '取消')));
+});
 $('#btnDelList').onclick = () => openSheet('刪除這個清單？', body => {
   const del = () => { data.lists = data.lists.filter(l => l.id !== curListId); commit(); closeSheet(); renderLists(); nav('lists'); };
   body.append(h('div', { class: 'row', style: 'margin:0' },
@@ -277,17 +288,22 @@ function removeItem(listId, epId) {
   l.items = l.items.filter(e => e.id !== epId);
   commit(); renderListItems();
 }
-function addTo(l, e) {
-  if (l.items.some(x => x.id === e.id)) return toast(`「${l.name}」裡已經有這集`);
-  l.items.push(e); commit();
-  toast(`已加入「${l.name}」`);
+function addTo(l, eps) {                 // eps 可以是一集或一整批
+  const list = [].concat(eps);
+  const have = new Set(l.items.map(x => x.id));
+  const fresh = list.filter(e => !have.has(e.id));
+  if (!fresh.length) return toast(list.length > 1 ? `這 ${list.length} 集都已在「${l.name}」裡` : `「${l.name}」裡已經有這集`);
+  l.items.push(...fresh); commit();
+  const dup = list.length - fresh.length;
+  toast(`已加入「${l.name}」${fresh.length} 集` + (dup ? `（略過 ${dup} 集重複）` : ''));
 }
-function pickList(e) {
-  openSheet('加入清單', body => {
+function pickList(eps) {
+  const n = [].concat(eps).length;
+  openSheet(n > 1 ? `把 ${n} 集加入清單` : '加入清單', body => {
     for (const l of data.lists)
-      body.append(h('button', { class: 'opt', onclick: () => { addTo(l, e); closeSheet(); } }, l.name + ' ', h('small', {}, `${l.items.length} 集`)));
+      body.append(h('button', { class: 'opt', onclick: () => { addTo(l, eps); closeSheet(); } }, l.name + ' ', h('small', {}, `${l.items.length} 集`)));
     const inp = h('input', { type: 'text', placeholder: '或建立新清單…', maxlength: 40 });
-    const mk = () => { const l = createList(inp.value); if (l) { addTo(l, e); closeSheet(); } };
+    const mk = () => { const l = createList(inp.value); if (l) { addTo(l, eps); closeSheet(); } };
     body.append(h('div', { class: 'row', style: 'margin:4px 0 0' }, inp, h('button', { class: 'btn primary', onclick: mk }, '建立並加入')));
   });
 }

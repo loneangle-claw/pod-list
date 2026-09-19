@@ -7,3 +7,8 @@
 - Token：Fine-grained PAT，只勾 private repo `pod-list-data`、Contents: Read and write；只存在裝置瀏覽器，不進 repo
 - 播放進度只存本機，不同步
 - 改版記得把 `sw.js` 的 `CACHE` 版號 +1
+
+## 操作
+
+- 節目頁「＋ 全部 N」：把目前列出的單集（有篩選就只加篩選後的）一次加進某個清單，重複的自動略過
+- 清單頁「清空」：只清單集，清單本身留著
