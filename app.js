@@ -35,8 +35,19 @@ function toast(msg) {
 }
 
 /* ---------- 資料 ---------- */
+const BUILD = '4';
 const emptyData = () => ({ version: 1, updatedAt: 0, shows: [], lists: [] });
-let data = Object.assign(emptyData(), jget(LS_DATA, {}));
+const key = x => String(x && x.id);
+function uniq(arr) {                    // 依 id 去重，保留先出現的
+  const seen = new Set();
+  return (arr || []).filter(x => x && x.id != null && !seen.has(key(x)) && seen.add(key(x)));
+}
+function sanitize(d) {                  // 任何進入 data 的來源（本機、匯入、GitHub）都過這一關
+  d.shows = uniq(d.shows);
+  d.lists = (d.lists || []).filter(l => l && l.id).map(l => (l.items = uniq(l.items), l));
+  return d;
+}
+let data = sanitize(Object.assign(emptyData(), jget(LS_DATA, {})));
 let pos = jget(LS_POS, {});            // 各單集播放位置，只存本機（避免每幾秒就 commit）
 
 function commit() {                     // 任何清單異動後呼叫
@@ -107,7 +118,7 @@ async function pull(force) {            // 遠端較新就採用遠端；本機�
     ghSha = rem.sha;
     const rt = rem.data ? (rem.data.updatedAt || 0) : -1, lt = data.updatedAt || 0;
     if (rem.data && (force || rt > lt)) {
-      data = Object.assign(emptyData(), rem.data);
+      data = sanitize(Object.assign(emptyData(), rem.data));
       jset(LS_DATA, data); renderAll();
       badge('ok', '已同步');
     } else if (lt > rt) await push();
@@ -207,8 +218,10 @@ function visibleEpisodes() {            // 篩選後的單集，也是「全部�
 function renderEpisodes() {
   const eps = visibleEpisodes();
   const msg = curEpisodes.length ? '沒有符合的單集' : '這個節目沒有可播放的單集';
-  $('#btnAddAll').textContent = `＋ 全部${eps.length ? ' ' + eps.length : ''}`;
-  $('#btnAddAll').disabled = !eps.length;
+  const b = $('#btnAddAll');
+  b.textContent = `＋ 全部${eps.length ? ' ' + eps.length : ''}`;
+  b.disabled = !eps.length;
+  b.style.opacity = eps.length ? '' : '.45';
   $('#episodes').replaceChildren(...(eps.length ? eps.map(e => epRow(e, { queue: eps })) : [h('div', { class: 'empty' }, msg)]));
 }
 $('#epFilter').oninput = renderEpisodes;
@@ -221,7 +234,10 @@ function epRow(e, { queue, listId }) {
     ? [h('button', { class: 'icon-btn', 'aria-label': '上移', onclick: stop(() => moveItem(listId, e.id, -1)) }, '↑'),
        h('button', { class: 'icon-btn', 'aria-label': '下移', onclick: stop(() => moveItem(listId, e.id, 1)) }, '↓'),
        h('button', { class: 'icon-btn', 'aria-label': '移除', onclick: stop(() => removeItem(listId, e.id)) }, '✕')]
-    : [h('button', { class: 'icon-btn add', 'aria-label': '加入清單', onclick: stop(() => pickList(e)) }, '＋')];
+    : [(() => {
+        const inNames = data.lists.filter(l => l.items.some(x => key(x) === key(e))).map(l => l.name);
+        return h('button', { class: 'icon-btn add' + (inNames.length ? ' in' : ''), 'aria-label': '加入清單', title: inNames.length ? '已在：' + inNames.join('、') : '加入清單', onclick: stop(() => pickList(e)) }, inNames.length ? '✓' : '＋');
+      })()];
   const isNow = nowEp() && nowEp().id === e.id;
   return h('div', { class: 'item tap' + (isNow ? ' now' : ''), 'data-ep': e.id, onclick: () => playQueue(queue, queue.indexOf(e)) },
     h('img', { src: e.art, loading: 'lazy', alt: '' }),
@@ -289,13 +305,14 @@ function removeItem(listId, epId) {
   commit(); renderListItems();
 }
 function addTo(l, eps) {                 // eps 可以是一集或一整批
-  const list = [].concat(eps);
-  const have = new Set(l.items.map(x => x.id));
-  const fresh = list.filter(e => !have.has(e.id));
+  const list = uniq([].concat(eps));     // 先把這批自己的重複去掉
+  const have = new Set(l.items.map(key)); // 再擋掉清單裡已經有的
+  const fresh = list.filter(e => !have.has(key(e)));
   if (!fresh.length) return toast(list.length > 1 ? `這 ${list.length} 集都已在「${l.name}」裡` : `「${l.name}」裡已經有這集`);
   l.items.push(...fresh); commit();
   const dup = list.length - fresh.length;
   toast(`已加入「${l.name}」${fresh.length} 集` + (dup ? `（略過 ${dup} 集重複）` : ''));
+  if (curView === 'show') renderEpisodes();   // 讓 ＋ 立刻變成 ✓
 }
 function pickList(eps) {
   const n = [].concat(eps).length;
@@ -442,7 +459,7 @@ $('#fileImport').onchange = async e => {
   try {
     const j = JSON.parse(await f.text());
     if (!Array.isArray(j.lists)) throw 0;
-    data = Object.assign(emptyData(), j); commit(); renderAll(); toast('已匯入');
+    data = sanitize(Object.assign(emptyData(), j)); commit(); renderAll(); toast('已匯入');
   } catch { toast('檔案格式不對'); }
   e.target.value = '';
 };
@@ -457,4 +474,22 @@ const last = jget(LS_LAST, null);
 if (last && last.queue && last.queue[last.qi]) { queue = last.queue; qi = last.qi; loadEp(false); }
 pull(false);
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && !pushing && audio.paused) pull(false); });
-if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js');
+/* 版本與更新：GitHub Pages 的 max-age=600 會讓 HTML 與 JS 版本錯開，
+   所以 index.html 以 ?v= 綁版本，並在偵測到新的 service worker 接手時自動重載一次。 */
+$('#ver').textContent = BUILD;
+$('#btnReload').onclick = async () => {
+  try {
+    if ('serviceWorker' in navigator) for (const r of await navigator.serviceWorker.getRegistrations()) await r.unregister();
+    if (window.caches) for (const k of await caches.keys()) await caches.delete(k);
+  } catch {}
+  location.replace(location.pathname + '?r=' + Date.now());
+};
+if ('serviceWorker' in navigator && location.protocol === 'https:') {
+  const hadController = !!navigator.serviceWorker.controller;
+  let reloading = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController || reloading) return;
+    reloading = true; location.reload();
+  });
+  navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(reg => reg.update()).catch(() => {});
+}

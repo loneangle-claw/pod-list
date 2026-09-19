@@ -8,7 +8,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-192.png">
-<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="style.css?v=4">
 </head>
 <body>
 <header id="topbar">
@@ -82,6 +82,7 @@
       <button id="btnImport" class="btn">匯入 JSON</button>
       <input id="fileImport" type="file" accept="application/json,.json" hidden>
     </div>
+    <p class="hint">版本 <span id="ver"></span>　<button id="btnReload" class="btn" style="padding:4px 10px">強制更新</button></p>
   </section>
 </main>
 
@@ -111,6 +112,6 @@
 <dialog id="sheet"><div id="sheetBody"></div></dialog>
 <div id="toast" hidden></div>
 <audio id="audio" preload="metadata"></audio>
-<script src="app.js"></script>
+<script src="app.js?v=4"></script>
 </body>
 </html>

@@ -12,3 +12,5 @@
 
 - 節目頁「＋ 全部 N」：把目前列出的單集（有篩選就只加篩選後的）一次加進某個清單，重複的自動略過
 - 清單頁「清空」：只清單集，清單本身留著
+- 單集右邊 ＋ 變 ✓ 代表已在某個清單裡（長按/游標可看在哪幾個清單）；同一清單絕不重複加入
+- 版本：index.html 以 `?v=N` 引用 app.js/style.css，改版時 index.html、sw.js 的 SHELL、app.js 的 BUILD 要一起改號，避免 GitHub Pages 的 max-age=600 讓 HTML 與 JS 版本錯開
