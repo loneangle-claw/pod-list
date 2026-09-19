@@ -35,7 +35,7 @@ function toast(msg) {
 }
 
 /* ---------- 資料 ---------- */
-const BUILD = '4';
+const BUILD = '5';
 const emptyData = () => ({ version: 1, updatedAt: 0, shows: [], lists: [] });
 const key = x => String(x && x.id);
 function uniq(arr) {                    // 依 id 去重，保留先出現的
@@ -474,6 +474,11 @@ const last = jget(LS_LAST, null);
 if (last && last.queue && last.queue[last.qi]) { queue = last.queue; qi = last.qi; loadEp(false); }
 pull(false);
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && !pushing && audio.paused) pull(false); });
+/* 鎖住縮放：viewport 的 user-scalable=no 在 iOS Safari 分頁模式會被忽略（加到主畫面才生效），
+   所以再補擋 iOS 專有的 gesture 事件；雙擊放大則由 CSS 的 touch-action:manipulation 處理。 */
+for (const t of ['gesturestart', 'gesturechange', 'gestureend'])
+  document.addEventListener(t, e => e.preventDefault(), { passive: false });
+
 /* 版本與更新：GitHub Pages 的 max-age=600 會讓 HTML 與 JS 版本錯開，
    所以 index.html 以 ?v= 綁版本，並在偵測到新的 service worker 接手時自動重載一次。 */
 $('#ver').textContent = BUILD;
