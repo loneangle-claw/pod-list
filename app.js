@@ -65,7 +65,7 @@ function toast(msg) {
 }
 
 /* ---------- 資料 ---------- */
-const BUILD = '6';
+const BUILD = '7';
 const emptyData = () => ({ version: 1, updatedAt: 0, shows: [], lists: [] });
 const key = x => String(x && x.id);
 function uniq(arr) {                    // 依 id 去重，保留先出現的
@@ -211,7 +211,7 @@ $('#searchForm').onsubmit = async e => {
 };
 function showRow(s, count) {
   return h('div', { class: 'item tap', onclick: () => openShow(s) },
-    h('img', { src: s.art, loading: 'lazy', alt: '' }),
+    h('span', { class: 'art' }, h('img', { src: s.art, loading: 'lazy', alt: '' })),
     h('div', { class: 'meta' }, h('div', { class: 't' }, s.name), h('div', { class: 's' }, s.artist + (count ? ` · ${count} 集` : ''))));
 }
 function renderMyShows() {
@@ -270,7 +270,7 @@ function epRow(e, { queue, listId }) {
   const isNow = nowEp() && nowEp().id === e.id;
   return h('div', { class: 'item tap' + (isNow ? ' now' : ''), 'data-ep': e.id, onclick: () => playQueue(queue, queue.indexOf(e)) },
     h('span', { class: 'idx' }, String(queue.indexOf(e) + 1)),
-    h('img', { src: e.art, loading: 'lazy', alt: '' }),
+    h('span', { class: 'art' }, h('img', { src: e.art, loading: 'lazy', alt: '' })),
     h('div', { class: 'meta' }, h('div', { class: 't' }, e.title), h('div', { class: 's' }, sub)),
     h('div', { class: 'acts' }, acts));
 }
@@ -281,7 +281,7 @@ function renderLists() {
   const rows = data.lists.map(l => {
     const total = l.items.reduce((a, e) => a + (e.ms || 0), 0) / 1000;
     return h('div', { class: 'item tap', onclick: () => openList(l.id) },
-      h('img', { src: (l.items[0] || {}).art || 'icon-192.png', alt: '' }),
+      h('span', { class: 'art' }, h('img', { src: (l.items[0] || {}).art || 'icon-192.png', alt: '' })),
       h('div', { class: 'meta' }, h('div', { class: 't' }, l.name), h('div', { class: 's' }, `${l.items.length} 集` + (total ? ` · ${fmtT(total)}` : ''))));
   });
   $('#lists').replaceChildren(...(rows.length ? rows : [h('div', { class: 'empty' }, '還沒有清單，先在上面建立一個')]));
@@ -363,6 +363,70 @@ function openSheet(title, build) {
 function closeSheet() { $('#sheet').close(); }
 $('#sheet').addEventListener('click', e => { if (e.target === $('#sheet')) closeSheet(); });
 
+/* ---------- 動態：播放畫面展開／收合、切歌封面轉場 ----------
+   全用 WAAPI，隨時可被下一個動作打斷；系統開了「減少動態效果」就全部直接切。 */
+const EASE = 'cubic-bezier(.32,.72,0,1)';
+const calm = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+const NP_REST = ['.np-top', '.np-meta', '.np-seek', '.np-ctl', '.np-extra'];
+let coverDir = 1;
+function stopNP() { $('#np').getAnimations({ subtree: true }).forEach(a => a.cancel()); }
+function miniToCover() {                 // 迷你列封面 → 大封面的位移與縮放（.cover 的 transform-origin 是左上角）
+  const a = $('#pArt').getBoundingClientRect(), b = $('#npCover').getBoundingClientRect();
+  return `translate(${a.left - b.left}px,${a.top - b.top}px) scale(${a.width / b.width})`;
+}
+function openNP() {
+  const np = $('#np');
+  if (!np.hidden) return;
+  np.hidden = false;
+  if (calm()) return;
+  stopNP();
+  np.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 220, easing: 'ease-out' });
+  $('#npCover').animate([{ transform: miniToCover() }, { transform: 'none' }], { duration: 500, easing: EASE });
+  NP_REST.forEach((sel, i) => $(sel).animate(
+    [{ opacity: 0, transform: 'translateY(30px)' }, { opacity: 1, transform: 'none' }],
+    { duration: 440, delay: 70 + i * 40, easing: EASE, fill: 'backwards' }));
+}
+function closeNP() {
+  const np = $('#np');
+  if (np.hidden) return;
+  if (calm()) { np.hidden = true; return; }
+  stopNP();
+  $('#npCover').animate([{ transform: 'none' }, { transform: miniToCover() }], { duration: 400, easing: EASE, fill: 'forwards' });
+  NP_REST.forEach(sel => $(sel).animate([{ opacity: 1 }, { opacity: 0 }], { duration: 160, fill: 'forwards' }));
+  const fade = np.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 260, delay: 140, easing: 'ease-in', fill: 'forwards' });
+  fade.finished.then(() => { np.hidden = true; stopNP(); }).catch(() => {});
+}
+function swapCover(src) {                // 舊封面往反方向滑出，新封面從行進方向滑入
+  const img = $('#npArt'), cover = $('#npCover'), disc = cover.querySelector('.disc:not(.ghost)');
+  const d = coverDir;
+  if (!calm()) $('#pArt').animate([{ opacity: 0, transform: 'scale(.7)' }, { opacity: 1, transform: 'none' }], { duration: 320, easing: EASE });
+  if ($('#np').hidden || calm() || !img.getAttribute('src') || img.getAttribute('src') === src) { img.src = src; return; }
+  const ghost = disc.cloneNode(true);
+  ghost.classList.add('ghost'); ghost.querySelector('img').removeAttribute('id');
+  cover.append(ghost);
+  let started = false;
+  const go = () => {
+    if (started) return;
+    started = true; img.src = src;
+    ghost.animate([{ transform: 'none', opacity: 1 }, { transform: `translateX(${-52 * d}%) scale(.8)`, opacity: 0 }],
+      { duration: 420, easing: EASE, fill: 'forwards' }).finished.catch(() => {}).then(() => ghost.remove());
+    disc.animate([{ transform: `translateX(${52 * d}%) scale(.8)`, opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 480, easing: EASE });
+    $('.np-meta').animate([{ opacity: 0, transform: `translateX(${18 * d}px)` }, { opacity: 1, transform: 'none' }], { duration: 380, easing: EASE });
+  };
+  const pre = new Image();               // 先把新圖解碼好再動，避免滑進來的是空白
+  pre.src = src;
+  (pre.decode ? pre.decode() : Promise.reject()).then(go, go);
+  setTimeout(go, 700);
+}
+
+// 播放畫面：往下滑一段就收合（進度條上的拖曳不算）
+{
+  let y0 = null;
+  const np = $('#np');
+  np.addEventListener('touchstart', e => { y0 = e.target.closest('#seek') || np.scrollTop > 0 ? null : e.touches[0].clientY; }, { passive: true });
+  np.addEventListener('touchend', e => { if (y0 != null && e.changedTouches[0].clientY - y0 > 80) closeNP(); y0 = null; }, { passive: true });
+}
+
 /* ---------- 播放器（迷你列 + 全螢幕播放畫面） ---------- */
 const audio = $('#audio');
 let queue = [], qi = -1, seeking = false, lastSave = 0;
@@ -385,7 +449,7 @@ function loadEp(autoplay) {
   if (!e) return;
   $('#player').hidden = false;
   $('#pArt').src = e.art; $('#pTitle').textContent = e.title; $('#pSub').textContent = e.show;
-  $('#npArt').src = bigArt(e.art); $('#npTitle').textContent = e.title; $('#npSub').textContent = e.show;
+  swapCover(bigArt(e.art)); $('#npTitle').textContent = e.title; $('#npSub').textContent = e.show;
   document.documentElement.style.setProperty('--art', `url("${bigArt(e.art).replace(/["\\]/g, '')}")`);
   $('#pRate').textContent = rate + '×';
   audio.src = e.url;
@@ -401,14 +465,14 @@ function loadEp(autoplay) {
 function playQueue(q, i, restart) {
   if (i < 0 || !q[i]) return;
   const same = !restart && nowEp() && nowEp().id === q[i].id;
-  queue = q.slice(); qi = i;
+  queue = q.slice(); qi = i; coverDir = 1;
   if (same) { audio.paused ? audio.play() : audio.pause(); jset(LS_LAST, { queue, qi }); return; }
   savePos(); loadEp(true);
 }
 function step(d) {
   const j = qi + d;
   if (j < 0 || j >= queue.length) return false;
-  savePos(); qi = j; loadEp(true);
+  savePos(); qi = j; coverDir = d; loadEp(true);
   return true;
 }
 function markNow() {
@@ -434,10 +498,13 @@ $('#pRate').onclick = () => {
   audio.playbackRate = rate; $('#pRate').textContent = rate + '×';
   localStorage.setItem(LS_RATE, rate);
 };
-$('#pOpen').onclick = () => $('#np').hidden = false;
-$('#npClose').onclick = () => $('#np').hidden = true;
+$('#pOpen').onclick = openNP;
+$('#npClose').onclick = closeNP;
 $('#npAdd').onclick = () => { if (nowEp()) pickList(nowEp()); };
-audio.onplay = audio.onpause = () => { setPlayIcons(); if (audio.paused) savePos(); };
+audio.onplay = audio.onpause = () => {
+  setPlayIcons(); document.body.classList.toggle('playing', !audio.paused);
+  if (audio.paused) savePos();
+};
 audio.onended = () => {
   const e = nowEp();
   if (e) { delete pos[e.id]; jset(LS_POS, pos); }
@@ -473,7 +540,7 @@ function mediaSession(e) {
 }
 
 /* ---------- 外觀主題 ---------- */
-const THEMES = { glass: '#0b0b0f', pop: '#FFF1DC', print: '#F3EEE3' };
+const THEMES = { glass: '#0b0b0f', pop: '#FFF1DC', vinyl: '#15110e' };
 function setTheme(t) {
   if (!THEMES[t]) t = 'glass';
   document.documentElement.dataset.theme = t;
