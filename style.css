@@ -211,6 +211,7 @@ dialog#sheet::backdrop{background:rgba(0,0,0,.5)}
   --hard:3px 3px 0 var(--ink)}
 [data-theme=pop] body{background:radial-gradient(#FFD9A8 1.6px,transparent 1.7px) 0 0/18px 18px,#FFF1DC;font-weight:500}
 [data-theme=pop] #topbar{background:linear-gradient(#FFF1DC 70%,transparent)}
+[data-theme=pop] body::before{content:"";position:fixed;top:0;left:0;right:0;height:env(safe-area-inset-top);background:var(--ink);z-index:12}
 [data-theme=pop] #title{flex:none;max-width:70%;font-size:18px;font-weight:700;background:var(--yellow);border:var(--bw) solid var(--ink);border-radius:999px;padding:3px 16px;box-shadow:var(--hard);transform:rotate(-2deg)}
 [data-theme=pop] #syncBadge{margin-left:auto;background:#fff;border:2px solid var(--ink);font-weight:600}
 [data-theme=pop] #btnBack{background:#fff;border:var(--bw) solid var(--ink);box-shadow:2px 2px 0 var(--ink);min-width:44px;height:44px;font-size:20px}

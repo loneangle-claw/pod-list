@@ -65,7 +65,7 @@ function toast(msg) {
 }
 
 /* ---------- 資料 ---------- */
-const BUILD = '7';
+const BUILD = '8';
 const emptyData = () => ({ version: 1, updatedAt: 0, shows: [], lists: [] });
 const key = x => String(x && x.id);
 function uniq(arr) {                    // 依 id 去重，保留先出現的
