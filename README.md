@@ -15,3 +15,4 @@
 - 單集右邊 ＋ 變 ✓ 代表已在某個清單裡（長按/游標可看在哪幾個清單）；同一清單絕不重複加入
 - 版本：index.html 以 `?v=N` 引用 app.js/style.css，改版時 index.html、sw.js 的 SHELL、app.js 的 BUILD 要一起改號，避免 GitHub Pages 的 max-age=600 讓 HTML 與 JS 版本錯開
 - 手機鎖縮放：viewport `user-scalable=no`＋`touch-action:manipulation`＋擋 iOS `gesture*` 事件；表單一律 16px（iOS 低於 16px 聚焦時會自動放大整頁）
+- 外觀三主題（設定頁切換，存 localStorage `podlist.theme`）：玻璃／POP／節目表。皮膚全在 style.css 的 `[data-theme=…]` 區塊，token 為「底色／前景」成對制；圖示是 app.js 的 `IC` 常數（SVG），不用 emoji

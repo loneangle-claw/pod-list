@@ -18,6 +18,36 @@ function h(tag, attrs, ...kids) {
   for (const kid of kids.flat()) if (kid != null) el.append(kid);
   return el;
 }
+/* ---------- SVG 圖示（24 格；描邊跟主題的 --ic-w，.f 為實心） ---------- */
+const SKIP = 'M18.9 10.05A7.5 7.5 0 1 1 12 5.5h3M12.6 2.9l2.6 2.6-2.6 2.6';
+const IC = {
+  play: '<path class="f" d="M8 5.5v13a1 1 0 0 0 1.53.85l10.4-6.5a1 1 0 0 0 0-1.7L9.53 4.65A1 1 0 0 0 8 5.5z"/>',
+  pause: '<rect class="f" x="6" y="4.8" width="4.6" height="14.4" rx="1.2"/><rect class="f" x="13.4" y="4.8" width="4.6" height="14.4" rx="1.2"/>',
+  next: '<path class="f" d="M4.5 6.3v11.4a.9.9 0 0 0 1.4.75l8.5-5.7a.9.9 0 0 0 0-1.5L5.9 5.55a.9.9 0 0 0-1.4.75z"/><rect class="f" x="16.6" y="5" width="2.9" height="14" rx="1"/>',
+  prev: '<g transform="translate(24 0) scale(-1 1)"><path class="f" d="M4.5 6.3v11.4a.9.9 0 0 0 1.4.75l8.5-5.7a.9.9 0 0 0 0-1.5L5.9 5.55a.9.9 0 0 0-1.4.75z"/><rect class="f" x="16.6" y="5" width="2.9" height="14" rx="1"/></g>',
+  fwd30: `<path d="${SKIP}"/><text x="12" y="15.8" text-anchor="middle">30</text>`,
+  back15: `<g transform="translate(24 0) scale(-1 1)"><path d="${SKIP}"/></g><text x="12" y="15.8" text-anchor="middle">15</text>`,
+  search: '<circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.4 15.4L20 20"/>',
+  list: '<path d="M4 6.5h12M4 12h9M4 17.5h6"/><path class="f" d="M15.5 13.2v6.1a.6.6 0 0 0 .92.5l4.6-3.05a.6.6 0 0 0 0-1L16.42 12.7a.6.6 0 0 0-.92.5z"/>',
+  sliders: '<path d="M4 7.5h9M18.5 7.5H20M4 16.5h1.5M11 16.5h9"/><circle cx="15.8" cy="7.5" r="2.4"/><circle cx="8.2" cy="16.5" r="2.4"/>',
+  chevLeft: '<path d="M14.5 5l-7 7 7 7"/>',
+  chevDown: '<path d="M5 9l7 7 7-7"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
+  up: '<path d="M12 19V5.5M6 11l6-6 6 6"/>',
+  down: '<path d="M12 5v13.5M6 13l6 6 6-6"/>',
+  close: '<path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/>',
+  star: '<path d="M12 3.8l2.55 5.17 5.7.83-4.12 4.02.97 5.68L12 16.82 6.9 19.5l.97-5.68L3.75 9.8l5.7-.83z"/>',
+  starFill: '<path class="f" d="M12 3.8l2.55 5.17 5.7.83-4.12 4.02.97 5.68L12 16.82 6.9 19.5l.97-5.68L3.75 9.8l5.7-.83z"/>'
+};
+function icon(name) {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('viewBox', '0 0 24 24'); svg.setAttribute('class', 'ic'); svg.setAttribute('aria-hidden', 'true');
+  svg.innerHTML = IC[name];              // 只吃上面的常數，不接外部字串
+  return svg;
+}
+document.querySelectorAll('[data-ic]').forEach(el => el.prepend(icon(el.dataset.ic)));
+
 const jget = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } };
 const jset = (k, v) => localStorage.setItem(k, JSON.stringify(v));
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
@@ -35,7 +65,7 @@ function toast(msg) {
 }
 
 /* ---------- 資料 ---------- */
-const BUILD = '5';
+const BUILD = '6';
 const emptyData = () => ({ version: 1, updatedAt: 0, shows: [], lists: [] });
 const key = x => String(x && x.id);
 function uniq(arr) {                    // 依 id 去重，保留先出現的
@@ -209,7 +239,7 @@ function renderShowHead() {
   };
   $('#showHead').replaceChildren(h('img', { src: s.art, alt: '' }),
     h('div', {}, h('div', { class: 't' }, s.name), h('div', { class: 's' }, s.artist),
-      h('button', { class: 'btn', onclick: toggle }, fav ? '★ 已加入我的節目' : '☆ 加入我的節目')));
+      h('button', { class: 'btn sm', onclick: toggle }, icon(fav ? 'starFill' : 'star'), fav ? '已加入我的節目' : '加入我的節目')));
 }
 function visibleEpisodes() {            // 篩選後的單集，也是「全部加入」與播放佇列的範圍
   const kw = $('#epFilter').value.trim().toLowerCase();
@@ -219,9 +249,8 @@ function renderEpisodes() {
   const eps = visibleEpisodes();
   const msg = curEpisodes.length ? '沒有符合的單集' : '這個節目沒有可播放的單集';
   const b = $('#btnAddAll');
-  b.textContent = `＋ 全部${eps.length ? ' ' + eps.length : ''}`;
+  b.replaceChildren(icon('plus'), `全部${eps.length ? ' ' + eps.length : ''}`);
   b.disabled = !eps.length;
-  b.style.opacity = eps.length ? '' : '.45';
   $('#episodes').replaceChildren(...(eps.length ? eps.map(e => epRow(e, { queue: eps })) : [h('div', { class: 'empty' }, msg)]));
 }
 $('#epFilter').oninput = renderEpisodes;
@@ -231,15 +260,16 @@ function epRow(e, { queue, listId }) {
   const sub = [listId ? e.show : null, fmtD(e.date), e.ms ? fmtT(e.ms / 1000) : null, pos[e.id] > 5 ? `已聽到 ${fmtT(pos[e.id])}` : null].filter(Boolean).join(' · ');
   const stop = fn => ev => { ev.stopPropagation(); fn(); };
   const acts = listId
-    ? [h('button', { class: 'icon-btn', 'aria-label': '上移', onclick: stop(() => moveItem(listId, e.id, -1)) }, '↑'),
-       h('button', { class: 'icon-btn', 'aria-label': '下移', onclick: stop(() => moveItem(listId, e.id, 1)) }, '↓'),
-       h('button', { class: 'icon-btn', 'aria-label': '移除', onclick: stop(() => removeItem(listId, e.id)) }, '✕')]
+    ? [h('button', { class: 'icon-btn', 'aria-label': '上移', onclick: stop(() => moveItem(listId, e.id, -1)) }, icon('up')),
+       h('button', { class: 'icon-btn', 'aria-label': '下移', onclick: stop(() => moveItem(listId, e.id, 1)) }, icon('down')),
+       h('button', { class: 'icon-btn', 'aria-label': '移除', onclick: stop(() => removeItem(listId, e.id)) }, icon('close'))]
     : [(() => {
         const inNames = data.lists.filter(l => l.items.some(x => key(x) === key(e))).map(l => l.name);
-        return h('button', { class: 'icon-btn add' + (inNames.length ? ' in' : ''), 'aria-label': '加入清單', title: inNames.length ? '已在：' + inNames.join('、') : '加入清單', onclick: stop(() => pickList(e)) }, inNames.length ? '✓' : '＋');
+        return h('button', { class: 'icon-btn add' + (inNames.length ? ' in' : ''), 'aria-label': '加入清單', title: inNames.length ? '已在：' + inNames.join('、') : '加入清單', onclick: stop(() => pickList(e)) }, icon(inNames.length ? 'check' : 'plus'));
       })()];
   const isNow = nowEp() && nowEp().id === e.id;
   return h('div', { class: 'item tap' + (isNow ? ' now' : ''), 'data-ep': e.id, onclick: () => playQueue(queue, queue.indexOf(e)) },
+    h('span', { class: 'idx' }, String(queue.indexOf(e) + 1)),
     h('img', { src: e.art, loading: 'lazy', alt: '' }),
     h('div', { class: 'meta' }, h('div', { class: 't' }, e.title), h('div', { class: 's' }, sub)),
     h('div', { class: 'acts' }, acts));
@@ -333,18 +363,30 @@ function openSheet(title, build) {
 function closeSheet() { $('#sheet').close(); }
 $('#sheet').addEventListener('click', e => { if (e.target === $('#sheet')) closeSheet(); });
 
-/* ---------- 播放器 ---------- */
+/* ---------- 播放器（迷你列 + 全螢幕播放畫面） ---------- */
 const audio = $('#audio');
 let queue = [], qi = -1, seeking = false, lastSave = 0;
 const RATES = [1, 1.25, 1.5, 1.75, 2, 0.75];
 let rate = Number(localStorage.getItem(LS_RATE)) || 1;
 function nowEp() { return queue[qi]; }
+const bigArt = u => (u || '').replace(/\/\d+x\d+bb\./, '/600x600bb.');
+const dur = () => isFinite(audio.duration) && audio.duration ? audio.duration : (nowEp() ? nowEp().ms / 1000 : 0);
 
+function setPlayIcons() {
+  document.querySelectorAll('.js-play').forEach(b => b.replaceChildren(icon(audio.paused ? 'play' : 'pause')));
+}
+function paintProgress(pct) {
+  if (pct == null) { const d = dur(); pct = d ? Math.min(100, audio.currentTime / d * 100) : 0; }
+  $('#seek').style.setProperty('--p', pct + '%');
+  $('#pBar').style.setProperty('--p', pct + '%');
+}
 function loadEp(autoplay) {
   const e = nowEp();
   if (!e) return;
   $('#player').hidden = false;
   $('#pArt').src = e.art; $('#pTitle').textContent = e.title; $('#pSub').textContent = e.show;
+  $('#npArt').src = bigArt(e.art); $('#npTitle').textContent = e.title; $('#npSub').textContent = e.show;
+  document.documentElement.style.setProperty('--art', `url("${bigArt(e.art).replace(/["\\]/g, '')}")`);
   $('#pRate').textContent = rate + '×';
   audio.src = e.url;
   const p = pos[e.id] || 0;
@@ -354,7 +396,7 @@ function loadEp(autoplay) {
   }, { once: true });
   if (autoplay) audio.play().catch(err => { if (err.name !== 'AbortError') toast('無法播放這一集'); });
   jset(LS_LAST, { queue, qi });
-  markNow(); mediaSession(e);
+  setPlayIcons(); paintProgress(0); markNow(); mediaSession(e);
 }
 function playQueue(q, i, restart) {
   if (i < 0 || !q[i]) return;
@@ -379,9 +421,12 @@ function savePos() {
   jset(LS_POS, pos);
 }
 
-$('#pPlay').onclick = () => audio.paused ? audio.play() : audio.pause();
-$('#pBack').onclick = () => audio.currentTime = Math.max(0, audio.currentTime - 15);
-$('#pFwd').onclick = () => audio.currentTime = Math.min(audio.duration || 1e9, audio.currentTime + 30);
+const toggle = () => audio.paused ? audio.play() : audio.pause();
+const skip = s => audio.currentTime = Math.max(0, Math.min(audio.duration || 1e9, audio.currentTime + s));
+$('#pBack').append(icon('back15')); $('#pFwd').append(icon('fwd30')); $('#pFwdMini').append(icon('fwd30'));
+document.querySelectorAll('.js-play').forEach(b => b.onclick = toggle);
+$('#pBack').onclick = () => skip(-15);
+$('#pFwd').onclick = $('#pFwdMini').onclick = () => skip(30);
 $('#pPrev').onclick = () => { if (audio.currentTime > 5 || !step(-1)) audio.currentTime = 0; };
 $('#pNext').onclick = () => step(1);
 $('#pRate').onclick = () => {
@@ -389,8 +434,10 @@ $('#pRate').onclick = () => {
   audio.playbackRate = rate; $('#pRate').textContent = rate + '×';
   localStorage.setItem(LS_RATE, rate);
 };
-audio.onplay = () => $('#pPlay').textContent = '⏸';
-audio.onpause = () => { $('#pPlay').textContent = '▶'; savePos(); };
+$('#pOpen').onclick = () => $('#np').hidden = false;
+$('#npClose').onclick = () => $('#np').hidden = true;
+$('#npAdd').onclick = () => { if (nowEp()) pickList(nowEp()); };
+audio.onplay = audio.onpause = () => { setPlayIcons(); if (audio.paused) savePos(); };
 audio.onended = () => {
   const e = nowEp();
   if (e) { delete pos[e.id]; jset(LS_POS, pos); }
@@ -398,30 +445,46 @@ audio.onended = () => {
 };
 audio.onerror = () => { if (audio.getAttribute('src')) toast('音檔載入失敗'); };
 audio.ontimeupdate = () => {
-  const d = isFinite(audio.duration) && audio.duration ? audio.duration : (nowEp() ? nowEp().ms / 1000 : 0);
-  if (!seeking) $('#seek').value = d ? audio.currentTime / d * 1000 : 0;
-  $('#pTime').textContent = `${fmtT(audio.currentTime)} / ${fmtT(d)}`;
+  const d = dur();
+  if (!seeking) { $('#seek').value = d ? audio.currentTime / d * 1000 : 0; paintProgress(); }
+  $('#tCur').textContent = fmtT(audio.currentTime);
+  $('#tRem').textContent = '-' + fmtT(Math.max(0, d - audio.currentTime));
   if (Date.now() - lastSave > 5000) { lastSave = Date.now(); savePos(); }
 };
-$('#seek').oninput = () => seeking = true;
+$('#seek').oninput = () => { seeking = true; paintProgress($('#seek').value / 10); };
 $('#seek').onchange = () => {
   const d = audio.duration;
   if (isFinite(d) && d) audio.currentTime = $('#seek').value / 1000 * d;
   seeking = false;
 };
 addEventListener('pagehide', savePos);
+setPlayIcons();
 
 function mediaSession(e) {
   if (!('mediaSession' in navigator)) return;
-  navigator.mediaSession.metadata = new MediaMetadata({ title: e.title, artist: e.show, artwork: e.art ? [{ src: e.art, sizes: '160x160' }] : [] });
+  navigator.mediaSession.metadata = new MediaMetadata({ title: e.title, artist: e.show, artwork: e.art ? [{ src: bigArt(e.art), sizes: '600x600' }] : [] });
   const set = (a, f) => { try { navigator.mediaSession.setActionHandler(a, f); } catch {} };
   set('play', () => audio.play());
   set('pause', () => audio.pause());
-  set('seekbackward', () => $('#pBack').click());
-  set('seekforward', () => $('#pFwd').click());
+  set('seekbackward', () => skip(-15));
+  set('seekforward', () => skip(30));
   set('previoustrack', () => $('#pPrev').click());
   set('nexttrack', () => $('#pNext').click());
 }
+
+/* ---------- 外觀主題 ---------- */
+const THEMES = { glass: '#0b0b0f', pop: '#FFF1DC', print: '#F3EEE3' };
+function setTheme(t) {
+  if (!THEMES[t]) t = 'glass';
+  document.documentElement.dataset.theme = t;
+  try { localStorage.setItem('podlist.theme', t); } catch {}
+  document.querySelector('meta[name=theme-color]').content = THEMES[t];
+  document.querySelectorAll('[data-set-theme]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.setTheme === t)));
+}
+document.querySelectorAll('[data-set-theme]').forEach(b => b.onclick = () => setTheme(b.dataset.setTheme));
+setTheme(document.documentElement.dataset.theme);
+// dock 高度隨主題與迷你播放器出現而變，內容區的下緣留白跟著它
+new ResizeObserver(() => document.documentElement.style.setProperty('--dock-h', $('#dock').offsetHeight + 'px')).observe($('#dock'));
 
 /* ---------- 設定 ---------- */
 function fillGh() {
