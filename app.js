@@ -46,7 +46,8 @@ function commit() {                     // 任何清單異動後呼叫
 }
 
 /* ---------- GitHub 同步 ---------- */
-let gh = Object.assign({ owner: '', repo: 'pod-list', branch: 'main', path: 'data/playlists.json', token: '' }, jget(LS_GH, {}));
+// 預設指向專用的 private repo；清單只有帳號本人讀得到
+let gh = Object.assign({ owner: 'loneangle-claw', repo: 'pod-list-data', branch: 'main', path: 'playlists.json', token: '' }, jget(LS_GH, {}));
 let ghSha = null, pushTimer = null, pushing = false, dirty = false;
 const ghReady = () => gh.owner && gh.repo && gh.path && gh.token;
 const ghUrl = () => `https://api.github.com/repos/${encodeURIComponent(gh.owner)}/${encodeURIComponent(gh.repo)}/contents/${gh.path.split('/').map(encodeURIComponent).join('/')}`;
@@ -397,7 +398,7 @@ function fillGh() {
 function readGh() {
   gh = {
     owner: $('#ghOwner').value.trim(), repo: $('#ghRepo').value.trim(), branch: $('#ghBranch').value.trim() || 'main',
-    path: $('#ghPath').value.trim().replace(/^\/+/, '') || 'data/playlists.json', token: $('#ghToken').value.trim()
+    path: $('#ghPath').value.trim().replace(/^\/+/, '') || 'playlists.json', token: $('#ghToken').value.trim()
   };
   jset(LS_GH, gh); ghSha = null;
 }

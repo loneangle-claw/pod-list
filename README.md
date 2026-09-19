@@ -4,6 +4,6 @@
 
 - 資料來源：iTunes Search API（`search`、`lookup?entity=podcastEpisode`，每節目取最新 200 集）
 - 清單儲存：localStorage ＋ GitHub Contents API 同步（設定頁填 owner / repo / 分支 / 路徑 / token）
-- Token：Fine-grained PAT，只勾本 repo、Contents: Read and write；只存在裝置瀏覽器，不進 repo
+- Token：Fine-grained PAT，只勾 private repo `pod-list-data`、Contents: Read and write；只存在裝置瀏覽器，不進 repo
 - 播放進度只存本機，不同步
 - 改版記得把 `sw.js` 的 `CACHE` 版號 +1
