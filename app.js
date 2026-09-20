@@ -66,8 +66,8 @@ function toast(msg) {
 }
 
 /* ---------- 資料 ---------- */
-const BUILD = '9';
-const emptyData = () => ({ version: 1, updatedAt: 0, shows: [], lists: [] });
+const BUILD = '10';
+const emptyData = () => ({ version: 1, updatedAt: 0, shows: [], lists: [], excludes: {} });   // excludes：{ 節目id: [排除詞] }
 const key = x => String(x && x.id);
 function uniq(arr) {                    // 依 id 去重，保留先出現的
   const seen = new Set();
@@ -76,6 +76,7 @@ function uniq(arr) {                    // 依 id 去重，保留先出現的
 function sanitize(d) {                  // 任何進入 data 的來源（本機、匯入、GitHub）都過這一關
   d.shows = uniq(d.shows);
   d.lists = (d.lists || []).filter(l => l && l.id).map(l => (l.items = uniq(l.items), l));
+  if (!d.excludes || typeof d.excludes !== 'object' || Array.isArray(d.excludes)) d.excludes = {};
   return d;
 }
 let data = sanitize(Object.assign(emptyData(), jget(LS_DATA, {})));
@@ -253,11 +254,43 @@ $('#btnSort').onclick = () => {
 paintSort();
 function visibleEpisodes() {            // 篩選＋排序後的單集，也是「全部加入」與播放佇列的範圍
   const kw = $('#epFilter').value.trim().toLowerCase();
-  const eps = kw ? curEpisodes.filter(e => e.title.toLowerCase().includes(kw)) : curEpisodes.slice();
+  const eps = curEpisodes.filter(e => (!kw || e.title.toLowerCase().includes(kw)) && !isExcluded(e));
   return eps.sort(byDate(sortDir));
+}
+
+/* 排除詞：每個節目各記一組，標題含任一詞就隱藏（跟著清單資料一起同步） */
+const exclOf = id => data.excludes[id] || [];
+const isExcluded = e => { const t = e.title.toLowerCase(); return exclOf(curShow.id).some(x => t.includes(x.toLowerCase())); };
+function setExcl(id, terms) {
+  if (terms.length) data.excludes[id] = terms; else delete data.excludes[id];
+  commit(); renderEpisodes();
+}
+function renderExcl() {
+  const id = curShow.id, terms = exclOf(id);
+  const hidden = terms.length ? curEpisodes.filter(isExcluded).length : 0;
+  $('#excl').replaceChildren(
+    h('button', { class: 'btn sm', onclick: addExcl }, icon('plus'), '排除詞'),
+    ...terms.map(t => h('span', { class: 'tag' }, t,
+      h('button', { class: 'icon-btn', 'aria-label': `取消排除 ${t}`, onclick: () => setExcl(id, terms.filter(x => x !== t)) }, icon('close')))),
+    terms.length ? h('span', { class: 'excl-n' }, `已隱藏 ${hidden} 集`) : null);
+}
+function addExcl() {
+  openSheet('排除標題含這些詞的單集', body => {
+    const inp = h('input', { type: 'text', placeholder: '例如：口袋神探（多個用逗號分開）', maxlength: 120 });
+    const ok = () => {
+      const id = curShow.id, terms = exclOf(id).slice();
+      for (const t of inp.value.split(/[,，、;；]+/).map(x => x.trim()).filter(Boolean))
+        if (!terms.some(x => x.toLowerCase() === t.toLowerCase())) terms.push(t);
+      closeSheet(); setExcl(id, terms);
+    };
+    inp.onkeydown = e => { if (e.key === 'Enter') ok(); };
+    body.append(inp, h('div', { class: 'row', style: 'margin:12px 0 0' },
+      h('button', { class: 'btn primary', onclick: ok }, '加入'), h('button', { class: 'btn', onclick: closeSheet }, '取消')));
+  });
 }
 function renderEpisodes() {
   const eps = visibleEpisodes();
+  renderExcl();
   const msg = curEpisodes.length ? '沒有符合的單集' : '這個節目沒有可播放的單集';
   const b = $('#btnAddAll');
   b.replaceChildren(icon('plus'), `全部${eps.length ? ' ' + eps.length : ''}`);
