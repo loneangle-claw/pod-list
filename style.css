@@ -173,10 +173,10 @@ button:focus:not(:focus-visible){outline:none}
 .tp-pop{background:#FFF1DC;border:2.5px solid #2B2140;box-shadow:3px 3px 0 #FF6FAE}
 .tp-pop b{background:#2B2140}.tp-pop b:nth-child(2){background:#FF6FAE}
 .tp-pop b:nth-child(3){background:#FFD447;border:2.5px solid #2B2140}
-.tp-vinyl{background:radial-gradient(circle at 78% 30%,#E06A12 0 7px,#0c0a08 8px 10px,#1b1511 11px 30px,transparent 31px),radial-gradient(circle at 78% 30%,transparent 0 30px,transparent 31px),#EDE3D3;
+.tp-vinyl{background:radial-gradient(circle at 78% 30%,#E06A12 0 7px,#0c0a08 8px 10px,#1b1511 11px 30px,transparent 31px),#3A2C22;
   -webkit-mask:none;position:relative;overflow:hidden}
-.tp-vinyl b{background:#2A1D13;position:relative}.tp-vinyl b:nth-child(2){background:#9C8670}
-.tp-vinyl b:nth-child(3){background:#E06A12}
+.tp-vinyl b{background:#f6eee2;position:relative}.tp-vinyl b:nth-child(2){background:#c9b9a6}
+.tp-vinyl b:nth-child(3){background:#ff8a2a}
 
 /* ========== 主題一：玻璃（Apple 語彙；參考培養基申請單的毛玻璃層） ==========
    背景＝目前節目封面放大模糊＋一層薄紗；內容放在半透明玻璃卡（內縮分組列表）；
@@ -392,15 +392,14 @@ button:focus:not(:focus-visible){outline:none}
 /* ========== 主題三：黑膠（暖黑 × 琥珀橘；封面是唱片封套，播放中的那張會轉） ========== */
 [data-theme=vinyl]{
   --font:-apple-system,BlinkMacSystemFont,"PingFang TC","Microsoft JhengHei",system-ui,sans-serif;
-  --bg:#EDE3D3;--fg:#2A1D13;--card:#F8F1E6;--card-fg:#2A1D13;--pop:#FBF6EE;--pop-fg:#2A1D13;
-  --muted:#E3D6C3;--muted-fg:#7A6656;--accent:#E06A12;--accent-fg:#fff;
-  --primary:#E06A12;--primary-fg:#fff;--primary-line:transparent;--line:#D6C6AF;--input:#F8F1E6;--input-line:#D6C6AF;
-  --danger:#C2412F;--ok:#4F8A2B;--bw:1px;--radius:18px;--radius-sm:14px;--ic-w:2;
-  --trk-on:#E06A12;--trk-off:#D6C6AF;--trk-h:6px;--th:16px;--th-bg:#2A1D13;
+  --bg:#3A2C22;--fg:#f6eee2;--card:#4A392C;--card-fg:#f6eee2;--pop:#4F3D30;--pop-fg:#f6eee2;
+  --muted:#4F3D30;--muted-fg:#c9b9a6;--accent:#ff8a2a;--accent-fg:#1a0f05;
+  --primary:#ff8a2a;--primary-fg:#1a0f05;--primary-line:transparent;--line:#634D3D;--input:#4A392C;--input-line:#634D3D;
+  --danger:#ff6f61;--ok:#a5d97f;--bw:1px;--radius:18px;--radius-sm:14px;--ic-w:2;
+  --trk-on:#ff8a2a;--trk-off:#634D3D;--trk-h:6px;--th:16px;--th-bg:#f6eee2;
   --groove:repeating-radial-gradient(circle,#0c0a08 0 2px,#221a15 2px 3px)}
-[data-theme=vinyl] body{background:radial-gradient(120% 60% at 50% -10%,#FAF1E2,transparent 70%),#EDE3D3}
-[data-theme=vinyl] body::before{content:"";position:fixed;top:0;left:0;right:0;height:env(safe-area-inset-top);background:#2A1D13;z-index:12}
-[data-theme=vinyl] #topbar{background:linear-gradient(#EDE3D3 60%,transparent)}
+[data-theme=vinyl] body{background:radial-gradient(120% 60% at 50% -10%,#5C3B22,transparent 70%),#3A2C22}
+[data-theme=vinyl] #topbar{background:linear-gradient(#3A2C22 60%,transparent)}
 [data-theme=vinyl] #title{font-size:24px;font-weight:800;letter-spacing:-.01em}
 [data-theme=vinyl] #title::before{content:"";display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--accent);margin-right:10px;vertical-align:middle;position:relative;top:-2px}
 [data-theme=vinyl] #btnBack{background:var(--card);border:1px solid var(--line);min-width:44px;height:44px;font-size:20px}
@@ -414,20 +413,20 @@ button:focus:not(:focus-visible){outline:none}
   background:radial-gradient(circle,var(--accent) 0 16%,#0c0a08 17% 21%,transparent 22%),var(--groove);box-shadow:0 0 0 1px #4a3b30,0 2px 8px rgba(0,0,0,.5)}
 [data-theme=vinyl] .item.now .art::after{right:-28px}
 [data-theme=vinyl] .item.now .art{margin-right:28px}
-[data-theme=vinyl] .item img{position:relative;z-index:1;border-radius:6px;box-shadow:2px 0 8px rgba(40,25,10,.35)}
+[data-theme=vinyl] .item img{position:relative;z-index:1;border-radius:6px;box-shadow:2px 0 8px rgba(0,0,0,.5)}
 [data-theme=vinyl] .item .t{font-weight:700}
-[data-theme=vinyl] .chip img{border-radius:10px;box-shadow:0 8px 20px rgba(60,35,15,.3)}
-[data-theme=vinyl] .show-head img{border-radius:10px;box-shadow:0 12px 30px rgba(60,35,15,.35)}
+[data-theme=vinyl] .chip img{border-radius:10px;box-shadow:0 8px 20px rgba(0,0,0,.45)}
+[data-theme=vinyl] .show-head img{border-radius:10px;box-shadow:0 12px 30px rgba(0,0,0,.5)}
 [data-theme=vinyl] .idx{font-weight:800;color:var(--accent);font-size:15px}
-[data-theme=vinyl] #dock{background:#F4EBDD;border-top:1px solid var(--line)}
+[data-theme=vinyl] #dock{background:#33271E;border-top:1px solid var(--line)}
 [data-theme=vinyl] #pArt{border-radius:50%;width:42px;height:42px;box-shadow:0 0 0 3px #0c0a08,0 0 0 4px var(--line)}
 [data-theme=vinyl] .p-open{padding-left:4px;gap:14px}
 [data-theme=vinyl] #pBar{top:0;bottom:auto}
 [data-theme=vinyl] #player .js-play{background:var(--accent);color:var(--accent-fg);min-width:40px;height:40px;font-size:18px;margin-right:2px}
 [data-theme=vinyl] #tabs button{position:relative}
 [data-theme=vinyl] #tabs button.on::before{content:"";position:absolute;top:0;left:50%;width:22px;height:3px;margin-left:-11px;border-radius:0 0 3px 3px;background:var(--accent)}
-[data-theme=vinyl] #np{background:radial-gradient(90% 50% at 50% 28%,#F7E0C2,transparent 75%),#EDE3D3}
-[data-theme=vinyl] .plate{border-radius:50%;box-shadow:0 0 0 2px #0c0a08,0 24px 50px rgba(60,35,15,.35)}
+[data-theme=vinyl] #np{background:radial-gradient(90% 50% at 50% 28%,#6A4224,transparent 75%),#3A2C22}
+[data-theme=vinyl] .plate{border-radius:50%;box-shadow:0 0 0 2px #0c0a08,0 24px 50px rgba(0,0,0,.5)}
 [data-theme=vinyl] .spin{border-radius:50%;position:relative;background:var(--groove);will-change:transform}
 [data-theme=vinyl] .spin img{position:absolute;left:28%;top:28%;width:44%;height:44%;border-radius:50%;box-shadow:0 0 0 4px #0c0a08}
 [data-theme=vinyl] .spin::after{content:"";position:absolute;left:50%;top:50%;width:12px;height:12px;margin:-6px;border-radius:50%;background:var(--bg);box-shadow:0 0 0 2px #0c0a08}
@@ -437,7 +436,7 @@ button:focus:not(:focus-visible){outline:none}
 [data-theme=vinyl] .playing .disc[data-k="0"] .spin,[data-theme=vinyl] .playing #pArt{animation-play-state:running}
 [data-theme=vinyl] .np-ctl .hero{background:var(--accent);color:var(--accent-fg);font-size:34px}
 [data-theme=vinyl] #npTitle{font-size:22px;font-weight:800}
-[data-theme=vinyl] dialog#sheet{box-shadow:0 24px 60px rgba(60,35,15,.3)}
+[data-theme=vinyl] dialog#sheet{box-shadow:0 24px 60px rgba(0,0,0,.55)}
 @keyframes spin{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion:reduce){[data-theme=vinyl] .spin,[data-theme=vinyl] #pArt{animation:none!important}}
 

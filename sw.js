@@ -1,6 +1,6 @@
 // 只快取 App 外殼；iTunes / GitHub API / 音檔一律走網路
-const CACHE = 'podlist-v11';
-const SHELL = ['./', 'index.html', 'style.css?v=11', 'app.js?v=11', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png',
+const CACHE = 'podlist-v12';
+const SHELL = ['./', 'index.html', 'style.css?v=12', 'app.js?v=12', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png',
   'icon-glass-180.png', 'icon-pop-180.png', 'icon-vinyl-180.png', 'icon-glass-64.png', 'icon-pop-64.png', 'icon-vinyl-64.png'];
 
 self.addEventListener('install', e => {

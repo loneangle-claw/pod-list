@@ -66,7 +66,7 @@ function toast(msg) {
 }
 
 /* ---------- 資料 ---------- */
-const BUILD = '11';
+const BUILD = '12';
 const emptyData = () => ({ version: 1, updatedAt: 0, shows: [], lists: [], excludes: {} });   // excludes：{ 節目id: [排除詞] }
 const key = x => String(x && x.id);
 function uniq(arr) {                    // 依 id 去重，保留先出現的
@@ -727,7 +727,7 @@ function mediaSession(e) {
 }
 
 /* ---------- 外觀主題 ---------- */
-const THEMES = { glass: null, pop: '#FFF1DC', vinyl: '#EDE3D3' };   // 玻璃依淺色／深色另算
+const THEMES = { glass: null, pop: '#FFF1DC', vinyl: '#3A2C22' };   // 玻璃依淺色／深色另算
 const darkMQ = matchMedia('(prefers-color-scheme: dark)');
 function paintThemeColor() {
   const r = document.documentElement;
