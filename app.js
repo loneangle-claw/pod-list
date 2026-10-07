@@ -66,7 +66,7 @@ function toast(msg) {
 }
 
 /* ---------- 資料 ---------- */
-const BUILD = '12';
+const BUILD = '13';
 const emptyData = () => ({ version: 1, updatedAt: 0, shows: [], lists: [], excludes: {} });   // excludes：{ 節目id: [排除詞] }
 const key = x => String(x && x.id);
 function uniq(arr) {                    // 依 id 去重，保留先出現的
@@ -362,7 +362,7 @@ function renderLists() {
     const total = l.items.reduce((a, e) => a + (e.ms || 0), 0) / 1000;
     return h('div', { class: 'item tap', onclick: () => openList(l.id) },
       h('span', { class: 'art' }, h('img', { src: (l.items[0] || {}).art || 'icon-192.png', alt: '' })),
-      h('div', { class: 'meta' }, h('div', { class: 't' }, l.name), h('div', { class: 's' }, `${l.items.length} 集` + (total ? ` · ${fmtT(total)}` : '') + resumeText(l))));
+      h('div', { class: 'meta' }, h('div', { class: 't' }, l.name), h('div', { class: 's' }, `${l.items.length} 集` + (total ? ` · ${fmtT(total)}` : '')), resumeText(l)));
   });
   $('#lists').replaceChildren(...(rows.length ? rows : [h('div', { class: 'empty' }, '還沒有清單，先在上面建立一個')]));
 }
@@ -384,18 +384,30 @@ function resumeOf(l) {
   const i = l.items.findIndex(x => key(x) === String(l.resume.id));
   return i < 0 ? null : { i, ep: l.items[i], t: l.resume.t || 0 };
 }
-const resumeText = l => { const r = resumeOf(l); return r ? ` · 聽到第 ${r.i + 1} 集 ${fmtT(r.t)}` : ''; };
+const resumeText = l => {
+  const r = resumeOf(l);
+  if (!r) return null;
+  const live = qList === l.id && !audio.paused;
+  return h('div', { class: 'rs' }, icon(live ? 'pause' : 'play'), live ? `正在播放 第 ${r.i + 1} 集` : `聽到第 ${r.i + 1} 集 ${fmtT(r.t)}`);
+};
 function paintResume() {
   const l = getList(curListId), r = resumeOf(l), b = $('#btnResume');
-  b.hidden = !r || (qList === curListId && !audio.paused);
+  const live = !!r && qList === curListId && !audio.paused;
+  b.hidden = !r;
   $('#btnPlayAll').classList.toggle('primary', b.hidden);   // 同時只留一顆主要按鈕
-  if (r) b.replaceChildren(icon('play'), `繼續 第 ${r.i + 1} 集 ${fmtT(r.t)}`);
+  if (r) b.replaceChildren(icon(live ? 'pause' : 'play'), live ? `正在播放 第 ${r.i + 1} 集` : `繼續 第 ${r.i + 1} 集 ${fmtT(r.t)}`);
 }
 $('#btnResume').onclick = () => {
   const l = getList(curListId), r = resumeOf(l);
   if (!r) return;
+  if (qList === l.id && !audio.paused) return openNP();      // 正在播這個清單：直接打開播放畫面
   seekOnce = r.t; playQueue(l.items, r.i, true, l.id);
 };
+function listOfQueue(q) {                // 舊版沒記清單 id：佇列跟哪個清單的集數順序一模一樣，就算那個清單的
+  const ids = q.map(key).join();
+  const l = data.lists.find(l => l.items.length && l.items.map(key).join() === ids);
+  return l ? l.id : null;
+}
 function touchResume(sync) {             // sync=true 才更新時間戳並排程上傳；平常只寫本機
   const l = qList && getList(qList), e = nowEp();
   if (!l || !e || !l.items.some(x => key(x) === key(e))) return;
@@ -588,7 +600,7 @@ function closeNP() {
 /* ---------- 播放器（迷你列 + 全螢幕播放畫面） ---------- */
 const audio = $('#audio');
 let queue = [], qi = -1, seeking = false, lastSave = 0;
-let qList = null, seekOnce = null;      // qList：目前佇列來自哪個清單；seekOnce：下一次載入要跳到的秒數（清單續播用）
+let qList = null, seekOnce = null, onMeta = null;      // qList：目前佇列來自哪個清單；seekOnce：下一次載入要跳到的秒數（清單續播用）
 const clampRate = v => Math.min(3, Math.max(0.5, Math.round(v * 10) / 10));
 const fmtRate = v => v.toFixed(1) + '×';
 let rate = clampRate(Number(localStorage.getItem(LS_RATE)) || 1);
@@ -620,10 +632,12 @@ function loadEp(autoplay) {
   audio.src = e.url;
   const p = seekOnce != null ? seekOnce : pos[e.id] || 0;
   seekOnce = null;
-  audio.addEventListener('loadedmetadata', () => {
-    if (p > 10 && (!isFinite(audio.duration) || p < audio.duration - 30)) audio.currentTime = p;
+  audio.removeEventListener('loadedmetadata', onMeta);   // 上一集還沒載完就換集時，舊的跳秒不可套到新的一集
+  onMeta = () => {
+    if (nowEp() === e && p > 10 && (!isFinite(audio.duration) || p < audio.duration - 30)) audio.currentTime = p;
     audio.playbackRate = rate;
-  }, { once: true });
+  };
+  audio.addEventListener('loadedmetadata', onMeta, { once: true });
   if (autoplay) audio.play().catch(err => { if (err.name !== 'AbortError') toast('無法播放這一集'); });
   jset(LS_LAST, { queue, qi, listId: qList });
   if (autoplay && qList) { const l = getList(qList); if (l && l.items.some(x => key(x) === key(e))) { l.resume = { id: e.id, t: Math.floor(p) }; commit(); } }
@@ -632,10 +646,10 @@ function loadEp(autoplay) {
 function playQueue(q, i, restart, listId) {
   if (i < 0 || !q[i]) return;
   const same = !restart && nowEp() && nowEp().id === q[i].id && qList === (listId || null);
-  if (!same) touchResume(true);          // 換走之前，先記下舊清單停在哪
+  if (!same) { savePos(); touchResume(true); }   // 換走之前先記下舊的那集與舊清單停在哪（一定要在改 qi 之前）
   queue = q.slice(); qi = i; coverDir = 0; qList = listId || null;
   if (same) { audio.paused ? audio.play() : audio.pause(); jset(LS_LAST, { queue, qi, listId: qList }); return; }
-  savePos(); loadEp(true);
+  loadEp(true);
 }
 function step(d) {
   const j = qi + d;
@@ -686,7 +700,9 @@ $('#npAdd').onclick = () => { if (nowEp()) pickList(nowEp()); };
 audio.onplay = audio.onpause = () => {
   setPlayIcons(); document.body.classList.toggle('playing', !audio.paused);
   if (audio.paused && !audio.ended) { savePos(); touchResume(true); }
+  else if (!audio.paused) touchResume(false);   // 一開始播就把續播點指到這集（只寫本機，暫停時才上傳）
   if (curView === 'list') paintResume();
+  if (curView === 'lists') renderLists();
 };
 audio.onended = () => {
   const e = nowEp();
@@ -808,7 +824,7 @@ function renderAll() {
 }
 fillGh(); renderAll();
 const last = jget(LS_LAST, null);
-if (last && last.queue && last.queue[last.qi]) { queue = last.queue; qi = last.qi; qList = last.listId || null; loadEp(false); }
+if (last && last.queue && last.queue[last.qi]) { queue = last.queue; qi = last.qi; qList = last.listId || listOfQueue(queue); loadEp(false); }
 pull(false);
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && !pushing && audio.paused) pull(false); });
 /* 鎖住縮放：viewport 的 user-scalable=no 在 iOS Safari 分頁模式會被忽略（加到主畫面才生效），

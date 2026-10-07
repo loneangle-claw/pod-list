@@ -151,6 +151,8 @@ dialog#sheet::backdrop{background:rgba(0,0,0,.5)}
 .ind{display:none;position:absolute;left:0;pointer-events:none;z-index:0}
 #modeSeg{display:flex;width:100%}
 .item.resume .idx{color:var(--accent);font-weight:700}
+.item .rs{display:flex;align-items:center;gap:4px;font-size:12.5px;font-weight:600;color:var(--accent);margin-top:2px}
+.item .rs .ic{width:1.1em;height:1.1em}
 /* 播放速度 sheet：每格 0.1 */
 .rate-row{display:flex;align-items:center;justify-content:space-between;gap:12px}
 .rate-val{font-size:34px;font-weight:700;font-variant-numeric:tabular-nums;min-width:4ch;text-align:center}
