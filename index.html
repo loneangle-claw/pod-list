@@ -9,14 +9,15 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="POD·LIST">
 <title>POD·LIST 我的 Podcast 清單</title>
-<script>try{document.documentElement.dataset.theme=localStorage.getItem('podlist.theme')||'glass'}catch(e){}</script>
+<script>try{var d=document.documentElement;d.dataset.theme=localStorage.getItem('podlist.theme')||'glass';d.dataset.mode=localStorage.getItem('podlist.mode')||'auto'}catch(e){}</script>
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="icon" href="icon.svg" type="image/svg+xml">
-<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" id="favicon" href="icon-glass-64.png" type="image/png">
+<link rel="apple-touch-icon" id="touchIcon" href="icon-glass-180.png">
+<script>/* 主畫面圖示跟著主題：iOS 在「加入主畫面」當下讀這兩個 link，之後就固定 */(function(){var t=document.documentElement.dataset.theme;if(!/^(glass|pop|vinyl)$/.test(t))t='glass';document.getElementById('favicon').href='icon-'+t+'-64.png';document.getElementById('touchIcon').href='icon-'+t+'-180.png'})()</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&display=swap">
-<link rel="stylesheet" href="style.css?v=10">
+<link rel="stylesheet" href="style.css?v=11">
 </head>
 <body>
 <div id="ambient" aria-hidden="true"></div>
@@ -49,8 +50,12 @@
     <div id="showHead" class="show-head"></div>
     <div class="row">
       <input id="epFilter" type="search" placeholder="篩選單集標題…" autocomplete="off">
-      <button id="btnSort" class="btn" aria-label="切換時間排序"></button>
       <button id="btnAddAll" class="btn primary"></button>
+    </div>
+    <div class="row">
+      <div id="sortSeg" class="seg" role="tablist" aria-label="時間排序">
+        <button role="tab" data-dir="desc">新 → 舊</button><button role="tab" data-dir="asc">舊 → 新</button>
+      </div>
     </div>
     <div id="excl" class="excl"></div>
     <div id="episodes" class="list"></div>
@@ -66,6 +71,7 @@
 
   <section id="view-list" class="view" hidden>
     <div class="row wrap">
+      <button id="btnResume" class="btn primary" hidden></button>
       <button id="btnPlayAll" class="btn primary" data-ic="play">全部播放</button>
       <button id="btnSortList" class="btn" data-ic="sort">依時間排序</button>
       <button id="btnRename" class="btn">改名</button>
@@ -82,14 +88,22 @@
       <button class="theme-card" data-set-theme="pop"><i class="tp tp-pop"><b></b><b></b><b></b></i><span>POP</span></button>
       <button class="theme-card" data-set-theme="vinyl"><i class="tp tp-vinyl"><b></b><b></b><b></b></i><span>黑膠</span></button>
     </div>
+    <div id="modeWrap">
+      <h2 class="sec">玻璃 · 淺色／深色</h2>
+      <div id="modeSeg" class="seg" role="tablist" aria-label="淺色或深色">
+        <button role="tab" data-mode="auto">跟隨系統</button><button role="tab" data-mode="light">淺色</button><button role="tab" data-mode="dark">深色</button>
+      </div>
+    </div>
 
     <h2 class="sec">GitHub 同步</h2>
     <p class="hint">清單會存成 <b>private</b> repo 裡的一個 JSON 檔（只有你看得到），換裝置填同一組設定就同步。Token 只存在這台裝置的瀏覽器，不會寫進 repo。</p>
+    <div class="group">
     <label>擁有者 (owner)<input id="ghOwner" type="text" autocapitalize="off" spellcheck="false"></label>
     <label>Repo<input id="ghRepo" type="text" autocapitalize="off" spellcheck="false"></label>
     <label>分支<input id="ghBranch" type="text" autocapitalize="off" spellcheck="false"></label>
     <label>檔案路徑<input id="ghPath" type="text" autocapitalize="off" spellcheck="false"></label>
     <label>Personal Access Token<input id="ghToken" type="password" autocomplete="off" placeholder="github_pat_…"></label>
+    </div>
     <div class="row wrap">
       <button id="btnSaveGh" class="btn primary">儲存並同步</button>
       <button id="btnPull" class="btn">從 GitHub 拉回</button>
@@ -148,6 +162,6 @@
 <dialog id="sheet"><div id="sheetBody"></div></dialog>
 <div id="toast" hidden></div>
 <audio id="audio" preload="metadata"></audio>
-<script src="app.js?v=10"></script>
+<script src="app.js?v=11"></script>
 </body>
 </html>

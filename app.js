@@ -66,7 +66,7 @@ function toast(msg) {
 }
 
 /* ---------- 資料 ---------- */
-const BUILD = '10';
+const BUILD = '11';
 const emptyData = () => ({ version: 1, updatedAt: 0, shows: [], lists: [], excludes: {} });   // excludes：{ 節目id: [排除詞] }
 const key = x => String(x && x.id);
 function uniq(arr) {                    // 依 id 去重，保留先出現的
@@ -165,14 +165,43 @@ const PARENT = { show: 'search', list: 'lists' };
 const TITLES = { search: 'POD·LIST', lists: '我的清單', settings: '設定' };
 let curView = 'search', curShow = null, curListId = null, curEpisodes = [];
 function nav(v, title) {
+  const prev = curView;
   curView = v;
   for (const n of VIEWS) $('#view-' + n).hidden = n !== v;
   $('#btnBack').hidden = !PARENT[v];
   $('#title').textContent = title || TITLES[v] || '';
   const tab = PARENT[v] || v;
   document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
-  $('#main').scrollTop = 0;
+  $('#main').scrollTop = 0; document.body.classList.remove('scrolled');
+  if (v !== prev) rise([...$('#view-' + v).children].filter(el => !el.hidden));
+  placeAll();
 }
+/* 滑動膠囊：分段控制與底部分頁列的選中底色，從舊位置滑到新位置（滑動由 CSS transition 負責） */
+function placeInd(c) {
+  if (!c || !c.offsetParent) return;
+  const a = c.querySelector('.on,[aria-selected="true"]');
+  if (!a) return;
+  let ind = c.querySelector(':scope > .ind');
+  if (!ind) { ind = document.createElement('span'); ind.className = 'ind'; ind.setAttribute('aria-hidden', 'true'); c.prepend(ind); }
+  const cr = c.getBoundingClientRect(), ar = a.getBoundingClientRect();
+  const first = !c.classList.contains('ready');
+  if (first) ind.style.transition = 'none';          // 第一次定位不滑
+  ind.style.width = ar.width + 'px';
+  ind.style.transform = `translateX(${ar.left - cr.left - c.clientLeft}px)`;
+  if (first) { void ind.offsetWidth; ind.style.transition = ''; c.classList.add('ready'); }
+}
+function placeAll(reset) {
+  document.querySelectorAll('#tabs,.seg').forEach(c => { if (reset) c.classList.remove('ready'); placeInd(c); });
+}
+addEventListener('resize', () => placeAll(true));
+/* 換頁時內容依序浮上來（只在換頁那一次；資料回來的重畫不重播） */
+function rise(els, gap = 40) {
+  const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  els.slice(0, 10).forEach((el, i) => el.animate(
+    still ? [{ opacity: 0 }, { opacity: 1 }] : [{ opacity: 0, transform: 'translateY(14px) scale(.985)' }, { opacity: 1, transform: 'none' }],
+    { duration: still ? 200 : 320, delay: i * gap, easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'backwards' }));
+}
+$('#main').addEventListener('scroll', () => document.body.classList.toggle('scrolled', $('#main').scrollTop > 8), { passive: true });
 $('#btnBack').onclick = () => {
   const p = PARENT[curView];
   if (p === 'lists') renderLists(); else renderMyShows();
@@ -230,7 +259,7 @@ async function openShow(s) {
     const rs = await itunes('lookup', { id: s.id, entity: 'podcastEpisode', limit: 200, country: $('#country').value });
     if (curShow !== s) return;
     curEpisodes = rs.filter(r => r.wrapperType === 'podcastEpisode').map(r => epOf(r, s)).filter(e => e.url);
-    renderEpisodes();
+    renderEpisodes(); rise([...$('#episodes').children], 30);
   } catch (err) { $('#episodes').replaceChildren(h('div', { class: 'empty' }, '載入失敗：' + err.message)); }
 }
 function renderShowHead() {
@@ -245,12 +274,17 @@ function renderShowHead() {
 }
 const byDate = dir => (a, b) => dir * ((Date.parse(a.date) || 0) - (Date.parse(b.date) || 0));
 let sortDir = localStorage.getItem('podlist.sort') === 'asc' ? 1 : -1;   // -1 新→舊（預設）、1 舊→新
-function paintSort() { $('#btnSort').replaceChildren(icon('sort'), sortDir < 0 ? '新→舊' : '舊→新'); }
-$('#btnSort').onclick = () => {
-  sortDir = -sortDir;
+function paintSort() {
+  document.querySelectorAll('#sortSeg button').forEach(b => b.setAttribute('aria-selected', String((b.dataset.dir === 'asc') === (sortDir > 0))));
+  placeInd($('#sortSeg'));
+}
+document.querySelectorAll('#sortSeg button').forEach(b => b.onclick = () => {
+  const d = b.dataset.dir === 'asc' ? 1 : -1;
+  if (d === sortDir) return;
+  sortDir = d;
   localStorage.setItem('podlist.sort', sortDir > 0 ? 'asc' : 'desc');
   paintSort(); renderEpisodes();
-};
+});
 paintSort();
 function visibleEpisodes() {            // 篩選＋排序後的單集，也是「全部加入」與播放佇列的範圍
   const kw = $('#epFilter').value.trim().toLowerCase();
@@ -272,7 +306,7 @@ function renderExcl() {
     h('button', { class: 'btn sm', onclick: addExcl }, icon('plus'), '排除詞'),
     ...terms.map(t => h('span', { class: 'tag' }, t,
       h('button', { class: 'icon-btn', 'aria-label': `取消排除 ${t}`, onclick: () => setExcl(id, terms.filter(x => x !== t)) }, icon('close')))),
-    terms.length ? h('span', { class: 'excl-n' }, `已隱藏 ${hidden} 集`) : null);
+    ...(terms.length ? [h('span', { class: 'excl-n' }, `已隱藏 ${hidden} 集`)] : []));
 }
 function addExcl() {
   openSheet('排除標題含這些詞的單集', body => {
@@ -301,7 +335,9 @@ $('#epFilter').oninput = renderEpisodes;
 $('#btnAddAll').onclick = () => { const eps = visibleEpisodes(); if (eps.length) pickList(eps); };
 
 function epRow(e, { queue, listId }) {
-  const sub = [listId ? e.show : null, fmtD(e.date), e.ms ? fmtT(e.ms / 1000) : null, pos[e.id] > 5 ? `已聽到 ${fmtT(pos[e.id])}` : null].filter(Boolean).join(' · ');
+  const rs = listId ? resumeOf(getList(listId)) : null, here = !!rs && key(rs.ep) === key(e);
+  const heard = here ? `上次停在 ${fmtT(rs.t)}` : pos[e.id] > 5 ? `已聽到 ${fmtT(pos[e.id])}` : null;
+  const sub = [listId ? e.show : null, fmtD(e.date), e.ms ? fmtT(e.ms / 1000) : null, heard].filter(Boolean).join(' · ');
   const stop = fn => ev => { ev.stopPropagation(); fn(); };
   const acts = listId
     ? [h('button', { class: 'icon-btn', 'aria-label': '上移', onclick: stop(() => moveItem(listId, e.id, -1)) }, icon('up')),
@@ -312,7 +348,7 @@ function epRow(e, { queue, listId }) {
         return h('button', { class: 'icon-btn add' + (inNames.length ? ' in' : ''), 'aria-label': '加入清單', title: inNames.length ? '已在：' + inNames.join('、') : '加入清單', onclick: stop(() => pickList(e)) }, icon(inNames.length ? 'check' : 'plus'));
       })()];
   const isNow = nowEp() && nowEp().id === e.id;
-  return h('div', { class: 'item tap' + (isNow ? ' now' : ''), 'data-ep': e.id, onclick: () => playQueue(queue, queue.indexOf(e)) },
+  return h('div', { class: 'item tap' + (isNow ? ' now' : '') + (here ? ' resume' : ''), 'data-ep': e.id, onclick: () => playQueue(queue, queue.indexOf(e), false, listId) },
     h('span', { class: 'idx' }, String(queue.indexOf(e) + 1)),
     h('span', { class: 'art' }, h('img', { src: e.art, loading: 'lazy', alt: '' })),
     h('div', { class: 'meta' }, h('div', { class: 't' }, e.title), h('div', { class: 's' }, sub)),
@@ -326,7 +362,7 @@ function renderLists() {
     const total = l.items.reduce((a, e) => a + (e.ms || 0), 0) / 1000;
     return h('div', { class: 'item tap', onclick: () => openList(l.id) },
       h('span', { class: 'art' }, h('img', { src: (l.items[0] || {}).art || 'icon-192.png', alt: '' })),
-      h('div', { class: 'meta' }, h('div', { class: 't' }, l.name), h('div', { class: 's' }, `${l.items.length} 集` + (total ? ` · ${fmtT(total)}` : ''))));
+      h('div', { class: 'meta' }, h('div', { class: 't' }, l.name), h('div', { class: 's' }, `${l.items.length} 集` + (total ? ` · ${fmtT(total)}` : '') + resumeText(l))));
   });
   $('#lists').replaceChildren(...(rows.length ? rows : [h('div', { class: 'empty' }, '還沒有清單，先在上面建立一個')]));
 }
@@ -340,6 +376,31 @@ function renderListItems() {
   if (!l) return;
   const rows = l.items.map(e => epRow(e, { queue: l.items, listId: l.id }));
   $('#listItems').replaceChildren(...(rows.length ? rows : [h('div', { class: 'empty' }, '清單是空的，到「搜尋」找節目，按單集右邊的 ＋ 加進來')]));
+  paintResume();
+}
+/* 每個清單各記一個「上次聽到哪」：{ id: 單集id, t: 秒 }，存在清單資料裡跟著 GitHub 同步 */
+function resumeOf(l) {
+  if (!l || !l.resume) return null;
+  const i = l.items.findIndex(x => key(x) === String(l.resume.id));
+  return i < 0 ? null : { i, ep: l.items[i], t: l.resume.t || 0 };
+}
+const resumeText = l => { const r = resumeOf(l); return r ? ` · 聽到第 ${r.i + 1} 集 ${fmtT(r.t)}` : ''; };
+function paintResume() {
+  const l = getList(curListId), r = resumeOf(l), b = $('#btnResume');
+  b.hidden = !r || (qList === curListId && !audio.paused);
+  $('#btnPlayAll').classList.toggle('primary', b.hidden);   // 同時只留一顆主要按鈕
+  if (r) b.replaceChildren(icon('play'), `繼續 第 ${r.i + 1} 集 ${fmtT(r.t)}`);
+}
+$('#btnResume').onclick = () => {
+  const l = getList(curListId), r = resumeOf(l);
+  if (!r) return;
+  seekOnce = r.t; playQueue(l.items, r.i, true, l.id);
+};
+function touchResume(sync) {             // sync=true 才更新時間戳並排程上傳；平常只寫本機
+  const l = qList && getList(qList), e = nowEp();
+  if (!l || !e || !l.items.some(x => key(x) === key(e))) return;
+  l.resume = { id: e.id, t: Math.floor(audio.currentTime || 0) };
+  if (sync) commit(); else jset(LS_DATA, data);
 }
 function createList(name) {
   name = (name || '').trim();
@@ -375,7 +436,7 @@ $('#btnDelList').onclick = () => openSheet('刪除這個清單？', body => {
   body.append(h('div', { class: 'row', style: 'margin:0' },
     h('button', { class: 'btn danger', onclick: del }, '刪除'), h('button', { class: 'btn', onclick: closeSheet }, '取消')));
 });
-$('#btnPlayAll').onclick = () => { const l = getList(curListId); if (l && l.items.length) playQueue(l.items, 0, true); };
+$('#btnPlayAll').onclick = () => { const l = getList(curListId); if (l && l.items.length) playQueue(l.items, 0, true, l.id); };
 function moveItem(listId, epId, d) {
   const it = getList(listId).items, i = it.findIndex(e => e.id === epId), j = i + d;
   if (j < 0 || j >= it.length) return;
@@ -408,12 +469,23 @@ function pickList(eps) {
   });
 }
 function openSheet(title, build) {
+  const d = $('#sheet');
+  if (d.open) { d.getAnimations().forEach(a => a.cancel()); delete d.dataset.closing; d.close(); }
   const b = $('#sheetBody');
   b.replaceChildren(h('h3', {}, title));
   build(b);
   $('#sheet').showModal();
 }
-function closeSheet() { $('#sheet').close(); }
+function closeSheet() {
+  const d = $('#sheet');
+  if (!d.open || d.dataset.closing) return;
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return d.close();
+  const glass = document.documentElement.dataset.theme === 'glass';
+  d.dataset.closing = '1';
+  d.animate([{ transform: 'none', opacity: 1 }, glass ? { transform: 'translateY(100%)', opacity: 1 } : { transform: 'translateY(16px)', opacity: 0 }],
+    { duration: glass ? 280 : 180, easing: 'cubic-bezier(.4,0,1,1)' })
+    .finished.catch(() => {}).then(() => { if (d.dataset.closing) { delete d.dataset.closing; d.close(); } });
+}
 $('#sheet').addEventListener('click', e => { if (e.target === $('#sheet')) closeSheet(); });
 
 /* ---------- 動態：播放畫面展開／收合、封面列換首 ----------
@@ -516,8 +588,10 @@ function closeNP() {
 /* ---------- 播放器（迷你列 + 全螢幕播放畫面） ---------- */
 const audio = $('#audio');
 let queue = [], qi = -1, seeking = false, lastSave = 0;
-const RATES = [1, 1.25, 1.5, 1.75, 2, 0.75];
-let rate = Number(localStorage.getItem(LS_RATE)) || 1;
+let qList = null, seekOnce = null;      // qList：目前佇列來自哪個清單；seekOnce：下一次載入要跳到的秒數（清單續播用）
+const clampRate = v => Math.min(3, Math.max(0.5, Math.round(v * 10) / 10));
+const fmtRate = v => v.toFixed(1) + '×';
+let rate = clampRate(Number(localStorage.getItem(LS_RATE)) || 1);
 function nowEp() { return queue[qi]; }
 const bigArt = u => (u || '').replace(/\/\d+x\d+bb\./, '/600x600bb.');
 const dur = () => isFinite(audio.duration) && audio.duration ? audio.duration : (nowEp() ? nowEp().ms / 1000 : 0);
@@ -542,22 +616,25 @@ function loadEp(autoplay) {
   if (!calm()) $('#pArt').animate([{ opacity: 0 }, { opacity: 1 }], { duration: 260, easing: 'ease-out' });
   const art = `url("${e.art.replace(/["\\]/g, '')}")`;               // 背景光用小圖就夠（反正會被模糊）
   setTimeout(() => { if (nowEp() === e) document.documentElement.style.setProperty('--art', art); }, moving ? 520 : 0);
-  $('#pRate').textContent = rate + '×';
+  $('#pRate').textContent = fmtRate(rate);
   audio.src = e.url;
-  const p = pos[e.id] || 0;
+  const p = seekOnce != null ? seekOnce : pos[e.id] || 0;
+  seekOnce = null;
   audio.addEventListener('loadedmetadata', () => {
     if (p > 10 && (!isFinite(audio.duration) || p < audio.duration - 30)) audio.currentTime = p;
     audio.playbackRate = rate;
   }, { once: true });
   if (autoplay) audio.play().catch(err => { if (err.name !== 'AbortError') toast('無法播放這一集'); });
-  jset(LS_LAST, { queue, qi });
+  jset(LS_LAST, { queue, qi, listId: qList });
+  if (autoplay && qList) { const l = getList(qList); if (l && l.items.some(x => key(x) === key(e))) { l.resume = { id: e.id, t: Math.floor(p) }; commit(); } }
   setPlayIcons(); paintProgress(0); markNow(); mediaSession(e);
 }
-function playQueue(q, i, restart) {
+function playQueue(q, i, restart, listId) {
   if (i < 0 || !q[i]) return;
-  const same = !restart && nowEp() && nowEp().id === q[i].id;
-  queue = q.slice(); qi = i; coverDir = 0;
-  if (same) { audio.paused ? audio.play() : audio.pause(); jset(LS_LAST, { queue, qi }); return; }
+  const same = !restart && nowEp() && nowEp().id === q[i].id && qList === (listId || null);
+  if (!same) touchResume(true);          // 換走之前，先記下舊清單停在哪
+  queue = q.slice(); qi = i; coverDir = 0; qList = listId || null;
+  if (same) { audio.paused ? audio.play() : audio.pause(); jset(LS_LAST, { queue, qi, listId: qList }); return; }
   savePos(); loadEp(true);
 }
 function step(d) {
@@ -584,22 +661,40 @@ $('#pBack').onclick = () => skip(-15);
 $('#pFwd').onclick = $('#pFwdMini').onclick = () => skip(30);
 $('#pPrev').onclick = () => { if (audio.currentTime > 5 || !step(-1)) audio.currentTime = 0; };
 $('#pNext').onclick = () => step(1);
-$('#pRate').onclick = () => {
-  rate = RATES[(RATES.indexOf(rate) + 1) % RATES.length];
-  audio.playbackRate = rate; $('#pRate').textContent = rate + '×';
+function setRate(v) {
+  rate = clampRate(v);
+  audio.playbackRate = rate; $('#pRate').textContent = fmtRate(rate);
   localStorage.setItem(LS_RATE, rate);
-};
+}
+$('#pRate').onclick = () => openSheet('播放速度', body => {
+  const val = h('div', { class: 'rate-val' }), rng = h('input', { type: 'range', class: 'rate-range', min: 0.5, max: 3, step: 0.1, 'aria-label': '播放速度' });
+  const chips = [0.8, 1, 1.2, 1.5, 1.8, 2].map(v => h('button', { class: 'btn sm', 'data-v': v, onclick: () => upd(v) }, fmtRate(v)));
+  const upd = v => {
+    setRate(v); val.textContent = fmtRate(rate); rng.value = rate;
+    chips.forEach(c => c.classList.toggle('primary', Number(c.dataset.v) === rate));
+  };
+  rng.oninput = () => upd(Number(rng.value));
+  body.append(h('div', { class: 'rate-row' },
+      h('button', { class: 'btn', 'aria-label': '慢 0.1', onclick: () => upd(rate - 0.1) }, '－0.1'), val,
+      h('button', { class: 'btn', 'aria-label': '快 0.1', onclick: () => upd(rate + 0.1) }, '＋0.1')),
+    rng, h('div', { class: 'rate-chips' }, chips));
+  upd(rate);
+});
 $('#pOpen').onclick = openNP;
 $('#npClose').onclick = closeNP;
 $('#npAdd').onclick = () => { if (nowEp()) pickList(nowEp()); };
 audio.onplay = audio.onpause = () => {
   setPlayIcons(); document.body.classList.toggle('playing', !audio.paused);
-  if (audio.paused) savePos();
+  if (audio.paused && !audio.ended) { savePos(); touchResume(true); }
+  if (curView === 'list') paintResume();
 };
 audio.onended = () => {
   const e = nowEp();
   if (e) { delete pos[e.id]; jset(LS_POS, pos); }
-  step(1);
+  if (!step(1) && qList) {                 // 整個清單聽完：清掉這個清單的續播點
+    const l = getList(qList);
+    if (l && l.resume) { delete l.resume; commit(); }
+  }
 };
 audio.onerror = () => { if (audio.getAttribute('src')) toast('音檔載入失敗'); };
 audio.ontimeupdate = () => {
@@ -607,7 +702,7 @@ audio.ontimeupdate = () => {
   if (!seeking) { $('#seek').value = d ? audio.currentTime / d * 1000 : 0; paintProgress(); }
   $('#tCur').textContent = fmtT(audio.currentTime);
   $('#tRem').textContent = '-' + fmtT(Math.max(0, d - audio.currentTime));
-  if (Date.now() - lastSave > 5000) { lastSave = Date.now(); savePos(); }
+  if (Date.now() - lastSave > 5000) { lastSave = Date.now(); savePos(); touchResume(false); }
 };
 $('#seek').oninput = () => { seeking = true; paintProgress($('#seek').value / 10); };
 $('#seek').onchange = () => {
@@ -615,7 +710,8 @@ $('#seek').onchange = () => {
   if (isFinite(d) && d) audio.currentTime = $('#seek').value / 1000 * d;
   seeking = false;
 };
-addEventListener('pagehide', savePos);
+addEventListener('pagehide', () => { savePos(); touchResume(false); });
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') { savePos(); touchResume(true); } });
 setPlayIcons();
 
 function mediaSession(e) {
@@ -631,15 +727,35 @@ function mediaSession(e) {
 }
 
 /* ---------- 外觀主題 ---------- */
-const THEMES = { glass: '#0b0b0f', pop: '#FFF1DC', vinyl: '#15110e' };
+const THEMES = { glass: null, pop: '#FFF1DC', vinyl: '#EDE3D3' };   // 玻璃依淺色／深色另算
+const darkMQ = matchMedia('(prefers-color-scheme: dark)');
+function paintThemeColor() {
+  const r = document.documentElement;
+  const dark = r.dataset.mode === 'dark' || (r.dataset.mode !== 'light' && darkMQ.matches);
+  document.querySelector('meta[name=theme-color]').content = THEMES[r.dataset.theme] || (dark ? '#0b0b0f' : '#EEF0F5');
+}
 function setTheme(t) {
-  if (!THEMES[t]) t = 'glass';
+  if (!(t in THEMES)) t = 'glass';
   document.documentElement.dataset.theme = t;
   try { localStorage.setItem('podlist.theme', t); } catch {}
-  document.querySelector('meta[name=theme-color]').content = THEMES[t];
+  paintThemeColor();
+  $('#favicon').href = `icon-${t}-64.png`; $('#touchIcon').href = `icon-${t}-180.png`;   // 主畫面圖示要在加入主畫面前切好主題
   document.querySelectorAll('[data-set-theme]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.setTheme === t)));
+  $('#modeWrap').hidden = t !== 'glass';
+  placeAll(true);
+}
+function setMode(m) {
+  if (!['auto', 'light', 'dark'].includes(m)) m = 'auto';
+  document.documentElement.dataset.mode = m;
+  try { localStorage.setItem('podlist.mode', m); } catch {}
+  paintThemeColor();
+  document.querySelectorAll('#modeSeg button').forEach(b => b.setAttribute('aria-selected', String(b.dataset.mode === m)));
+  placeInd($('#modeSeg'));
 }
 document.querySelectorAll('[data-set-theme]').forEach(b => b.onclick = () => setTheme(b.dataset.setTheme));
+document.querySelectorAll('#modeSeg button').forEach(b => b.onclick = () => setMode(b.dataset.mode));
+darkMQ.addEventListener('change', paintThemeColor);
+setMode(document.documentElement.dataset.mode);
 setTheme(document.documentElement.dataset.theme);
 // dock 高度隨主題與迷你播放器出現而變，內容區的下緣留白跟著它
 new ResizeObserver(() => document.documentElement.style.setProperty('--dock-h', $('#dock').offsetHeight + 'px')).observe($('#dock'));
@@ -692,7 +808,7 @@ function renderAll() {
 }
 fillGh(); renderAll();
 const last = jget(LS_LAST, null);
-if (last && last.queue && last.queue[last.qi]) { queue = last.queue; qi = last.qi; loadEp(false); }
+if (last && last.queue && last.queue[last.qi]) { queue = last.queue; qi = last.qi; qList = last.listId || null; loadEp(false); }
 pull(false);
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && !pushing && audio.paused) pull(false); });
 /* 鎖住縮放：viewport 的 user-scalable=no 在 iOS Safari 分頁模式會被忽略（加到主畫面才生效），

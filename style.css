@@ -144,6 +144,21 @@ dialog#sheet::backdrop{background:rgba(0,0,0,.5)}
 #toast{position:fixed;left:50%;bottom:calc(var(--dock-h) + env(safe-area-inset-bottom) + 14px);transform:translateX(-50%);z-index:20;max-width:90vw;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:9px 16px;border-radius:999px;font-size:13px;font-weight:600;background:var(--fg);color:var(--bg)}
 
+/* 分段控制（各主題共用；玻璃主題另加滑動圓點 .ind） */
+.seg{position:relative;display:inline-flex;padding:3px;border-radius:999px;background:var(--muted);border:var(--bw) solid var(--line)}
+.seg button{flex:1;background:none;border:0;padding:7px 16px;border-radius:999px;font-size:13.5px;font-weight:600;color:var(--muted-fg);white-space:nowrap}
+.seg button[aria-selected=true]{background:var(--card);color:var(--fg)}
+.ind{display:none;position:absolute;left:0;pointer-events:none;z-index:0}
+#modeSeg{display:flex;width:100%}
+.item.resume .idx{color:var(--accent);font-weight:700}
+/* 播放速度 sheet：每格 0.1 */
+.rate-row{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.rate-val{font-size:34px;font-weight:700;font-variant-numeric:tabular-nums;min-width:4ch;text-align:center}
+.rate-range{width:100%;margin:16px 0;accent-color:var(--accent)}
+.rate-chips{display:grid;grid-template-columns:repeat(6,1fr);gap:6px}
+.rate-chips .btn{padding:6px 0}
+button:focus:not(:focus-visible){outline:none}
+
 /* 主題選擇卡 */
 .themes{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
 .theme-card{background:none;border:0;padding:0;text-align:center;font-size:13px;font-weight:600;color:var(--muted-fg)}
@@ -152,65 +167,177 @@ dialog#sheet::backdrop{background:rgba(0,0,0,.5)}
 .theme-card[aria-pressed=true] .tp{outline-color:var(--accent)}
 .tp b{display:block;height:9px;border-radius:99px}
 .tp b:nth-child(1){width:70%}.tp b:nth-child(2){width:45%}.tp b:nth-child(3){width:100%;height:16px}
-.tp-glass{background:radial-gradient(at 15% 0,#7a2140,transparent 65%),radial-gradient(at 100% 30%,#23386b,transparent 60%),#0b0b0f}
-.tp-glass b{background:rgba(255,255,255,.75)}.tp-glass b:nth-child(2){background:rgba(255,255,255,.4)}
-.tp-glass b:nth-child(3){background:rgba(255,255,255,.18);border:.5px solid rgba(255,255,255,.35)}
+.tp-glass{background:radial-gradient(at 15% 0,#ffc4d3,transparent 65%),radial-gradient(at 100% 40%,#c3d8ff,transparent 60%),#EEF0F5}
+.tp-glass b{background:rgba(17,17,20,.75)}.tp-glass b:nth-child(2){background:rgba(17,17,20,.32)}
+.tp-glass b:nth-child(3){background:rgba(255,255,255,.7);border:1px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.08)}
 .tp-pop{background:#FFF1DC;border:2.5px solid #2B2140;box-shadow:3px 3px 0 #FF6FAE}
 .tp-pop b{background:#2B2140}.tp-pop b:nth-child(2){background:#FF6FAE}
 .tp-pop b:nth-child(3){background:#FFD447;border:2.5px solid #2B2140}
-.tp-vinyl{background:radial-gradient(circle at 78% 30%,#ff8a2a 0 7px,#0c0a08 8px 10px,transparent 11px),repeating-radial-gradient(circle at 78% 30%,#0c0a08 0 2px,#241c16 2px 3px) 0 0/100% 100%,#15110e;
+.tp-vinyl{background:radial-gradient(circle at 78% 30%,#E06A12 0 7px,#0c0a08 8px 10px,#1b1511 11px 30px,transparent 31px),radial-gradient(circle at 78% 30%,transparent 0 30px,transparent 31px),#EDE3D3;
   -webkit-mask:none;position:relative;overflow:hidden}
-.tp-vinyl b{background:#f6eee2;position:relative}.tp-vinyl b:nth-child(2){background:#b3a595}
-.tp-vinyl b:nth-child(3){background:#ff8a2a}
+.tp-vinyl b{background:#2A1D13;position:relative}.tp-vinyl b:nth-child(2){background:#9C8670}
+.tp-vinyl b:nth-child(3){background:#E06A12}
 
-/* ========== 主題一：玻璃（Liquid Glass 語彙） ==========
-   內容實心、浮層才用玻璃；內容從浮層底下捲過；邊緣用漸層淡出取代分隔線 */
+/* ========== 主題一：玻璃（Apple 語彙；參考培養基申請單的毛玻璃層） ==========
+   背景＝目前節目封面放大模糊＋一層薄紗；內容放在半透明玻璃卡（內縮分組列表）；
+   分頁列是浮動膠囊，選中的白色圓點用彈簧曲線滑過去；換頁時卡片依序浮上（app.js 的 rise）。
+   淺色／深色：data-mode = auto（跟隨系統）| light | dark。動畫只動 transform／opacity。 */
 [data-theme=glass]{
   --font:-apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang TC","Microsoft JhengHei",system-ui,sans-serif;
-  --bg:#0b0b0f;--fg:#fff;--card:rgba(255,255,255,.12);--card-fg:#fff;--pop:rgba(38,38,46,.72);--pop-fg:#fff;
-  --muted:rgba(118,118,128,.24);--muted-fg:rgba(235,235,245,.64);--accent:#ff375f;--accent-fg:#fff;
-  --primary:#ff375f;--primary-fg:#fff;--primary-line:transparent;--line:transparent;--input:rgba(118,118,128,.24);--input-line:transparent;
-  --danger:#ff6b6b;--ok:#32d74b;--bw:0px;--radius:16px;--radius-sm:12px;--ic-w:1.9;
-  --trk-on:#fff;--trk-off:rgba(255,255,255,.26);--trk-h:7px;--th:7px;--th-bg:transparent;
-  --glass:rgba(44,44,54,.52);--glass-edge:inset 0 1px 0 rgba(255,255,255,.24),inset 0 0 0 .5px rgba(255,255,255,.14),0 12px 32px rgba(0,0,0,.4)}
-[data-theme=glass] #ambient{display:block;background:radial-gradient(at 12% 0,#6b1d3a,transparent 60%),radial-gradient(at 100% 25%,#1f3263,transparent 55%),#0b0b0f}
-[data-theme=glass] #ambient::before{content:"";position:absolute;left:50%;top:50%;width:160px;height:160px;margin:-80px;background:var(--art,none) center/cover;filter:blur(11px) saturate(1.6);transform:scale(7.5);opacity:.55}
-[data-theme=glass] #ambient::after{content:"";position:absolute;inset:0;background:linear-gradient(rgba(11,11,15,.35),rgba(11,11,15,.82) 55%)}
-[data-theme=glass] body{background:#0b0b0f}
-[data-theme=glass] #topbar::before{content:"";position:absolute;inset:0 0 -18px;z-index:-1;pointer-events:none;
-  background:linear-gradient(rgba(11,11,15,.92) 40%,transparent);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);
-  -webkit-mask-image:linear-gradient(#000 60%,transparent);mask-image:linear-gradient(#000 60%,transparent)}
-[data-theme=glass] #title{font-size:28px;font-weight:800;letter-spacing:-.01em}
-[data-theme=glass] #btnBack{background:rgba(255,255,255,.16);box-shadow:inset 0 1px 0 rgba(255,255,255,.25);min-width:44px;height:44px;font-size:21px}
-[data-theme=glass] .badge{border:0;background:var(--card)}
-[data-theme=glass] .btn{border-radius:999px;-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);box-shadow:inset 0 1px 0 rgba(255,255,255,.18)}
-[data-theme=glass] .btn.primary{box-shadow:inset 0 1px 0 rgba(255,255,255,.3),0 6px 18px rgba(255,55,95,.35)}
-[data-theme=glass] .item{padding:9px 0}
-[data-theme=glass] .item::after{content:"";position:absolute;left:66px;right:0;bottom:0;height:.5px;background:rgba(255,255,255,.14)}
-[data-theme=glass] .item img{border-radius:9px;box-shadow:0 4px 12px rgba(0,0,0,.35)}
+  --bw:0px;--radius:20px;--radius-sm:12px;--ic-w:1.9;--line:transparent;--primary-line:transparent;--input-line:transparent;
+  --trk-h:7px;--th:7px;--th-bg:transparent;
+  --blur:blur(20px) saturate(160%);
+  --spring:cubic-bezier(.3,1.35,.5,1);
+  /* 淺色 */
+  --bg:#EEF0F5;--fg:#111114;--card:rgba(255,255,255,.62);--card-fg:#111114;--pop:rgba(248,248,252,.84);--pop-fg:#111114;
+  --muted:rgba(118,118,128,.14);--muted-fg:rgba(60,60,67,.64);--accent:#E8254F;--accent-fg:#fff;--primary:#E8254F;--primary-fg:#fff;
+  --input:rgba(255,255,255,.8);--danger:#D92D2D;--ok:#1E9E4A;--trk-on:#111114;--trk-off:rgba(60,60,67,.18);
+  --glass:rgba(255,255,255,.56);--glass-strong:rgba(250,250,253,.76);--edge:rgba(255,255,255,.8);
+  --gshadow:0 8px 30px rgba(30,30,60,.12);--hair:rgba(60,60,67,.14);--press:rgba(60,60,67,.08);
+  --pill:#fff;--pill-ink:#C8173F;
+  --amb:radial-gradient(at 10% 0,#ffd0dc,transparent 60%),radial-gradient(at 100% 30%,#cddfff,transparent 55%),radial-gradient(at 40% 100%,#d9f2ea,transparent 60%),#EEF0F5;
+  --art-op:.55;--veil:linear-gradient(rgba(238,240,245,.42),rgba(238,240,245,.8) 55%);
+  --veil-np:linear-gradient(rgba(238,240,245,.28),rgba(238,240,245,.72));
+  --sb-scrim:linear-gradient(rgba(0,0,0,.28),transparent)}
+[data-theme=glass][data-mode=dark]{
+  --bg:#0b0b0f;--fg:#fff;--card:rgba(255,255,255,.10);--card-fg:#fff;--pop:rgba(36,36,44,.8);--pop-fg:#fff;
+  --muted:rgba(118,118,128,.24);--muted-fg:rgba(235,235,245,.64);--accent:#ff375f;--primary:#ff375f;
+  --input:rgba(118,118,128,.24);--danger:#ff6b6b;--ok:#32d74b;--trk-on:#fff;--trk-off:rgba(255,255,255,.26);
+  --glass:rgba(40,40,50,.46);--glass-strong:rgba(30,30,38,.76);--edge:rgba(255,255,255,.14);
+  --gshadow:0 10px 36px rgba(0,0,0,.4);--hair:rgba(255,255,255,.12);--press:rgba(255,255,255,.08);
+  --pill:rgba(255,255,255,.92);--pill-ink:#C8173F;
+  --amb:radial-gradient(at 12% 0,#6b1d3a,transparent 60%),radial-gradient(at 100% 25%,#1f3263,transparent 55%),#0b0b0f;
+  --art-op:.55;--veil:linear-gradient(rgba(11,11,15,.35),rgba(11,11,15,.82) 55%);
+  --veil-np:linear-gradient(rgba(11,11,15,.25),rgba(11,11,15,.7));
+  --sb-scrim:none}
+@media (prefers-color-scheme:dark){
+  [data-theme=glass]:not([data-mode=light]){
+    --bg:#0b0b0f;--fg:#fff;--card:rgba(255,255,255,.10);--card-fg:#fff;--pop:rgba(36,36,44,.8);--pop-fg:#fff;
+    --muted:rgba(118,118,128,.24);--muted-fg:rgba(235,235,245,.64);--accent:#ff375f;--primary:#ff375f;
+    --input:rgba(118,118,128,.24);--danger:#ff6b6b;--ok:#32d74b;--trk-on:#fff;--trk-off:rgba(255,255,255,.26);
+    --glass:rgba(40,40,50,.46);--glass-strong:rgba(30,30,38,.76);--edge:rgba(255,255,255,.14);
+    --gshadow:0 10px 36px rgba(0,0,0,.4);--hair:rgba(255,255,255,.12);--press:rgba(255,255,255,.08);
+    --pill:rgba(255,255,255,.92);--pill-ink:#C8173F;
+    --amb:radial-gradient(at 12% 0,#6b1d3a,transparent 60%),radial-gradient(at 100% 25%,#1f3263,transparent 55%),#0b0b0f;
+    --art-op:.55;--veil:linear-gradient(rgba(11,11,15,.35),rgba(11,11,15,.82) 55%);
+    --veil-np:linear-gradient(rgba(11,11,15,.25),rgba(11,11,15,.7));
+    --sb-scrim:none}}
+
+/* 背景：封面模糊光＋薄紗 */
+[data-theme=glass] body{background:var(--bg)}
+[data-theme=glass] #ambient{display:block;background:var(--amb)}
+[data-theme=glass] #ambient::before{content:"";position:absolute;left:50%;top:50%;width:160px;height:160px;margin:-80px;background:var(--art,none) center/cover;filter:blur(11px) saturate(1.6);transform:scale(7.5);opacity:var(--art-op)}
+[data-theme=glass] #ambient::after{content:"";position:absolute;inset:0;background:var(--veil);transition:background .4s ease}
+/* 主畫面模式（black-translucent 狀態列字永遠是白的）：淺色時在瀏海區墊一層淡黑讓時間電量看得到 */
+[data-theme=glass] body::before{content:"";position:fixed;top:0;left:0;right:0;height:calc(env(safe-area-inset-top) * 1.6);background:var(--sb-scrim);z-index:12;pointer-events:none}
+
+/* 標頭：iOS 大標題；捲動後才浮出玻璃底 */
+[data-theme=glass] #topbar::before{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;
+  background:var(--glass-strong);-webkit-backdrop-filter:var(--blur);backdrop-filter:var(--blur);box-shadow:0 .5px 0 var(--hair);
+  opacity:0;transition:opacity .25s ease}
+[data-theme=glass] .scrolled #topbar::before{opacity:1}
+[data-theme=glass] #title{font-size:32px;font-weight:800;letter-spacing:-.02em}
+[data-theme=glass] #btnBack{background:var(--glass);border:1px solid var(--edge);-webkit-backdrop-filter:var(--blur);backdrop-filter:var(--blur);
+  box-shadow:var(--gshadow);min-width:44px;height:44px;font-size:21px;transition:transform .2s var(--spring)}
+[data-theme=glass] #btnBack:active{opacity:1;transform:scale(.9)}
+[data-theme=glass] .badge{border:1px solid var(--edge);background:var(--glass);-webkit-backdrop-filter:var(--blur);backdrop-filter:var(--blur)}
+[data-theme=glass] .sec{font-size:20px;font-weight:700;color:var(--fg);letter-spacing:0;margin:26px 2px 10px}
+
+/* 輸入框實心（可讀性）、按鈕是玻璃膠囊 */
+[data-theme=glass] input[type=text],[data-theme=glass] input[type=search],[data-theme=glass] input[type=password],[data-theme=glass] select{
+  background:var(--input);border:1px solid var(--edge);border-radius:12px}
+[data-theme=glass] .btn{border-radius:999px;background:var(--glass);color:var(--fg);border:1px solid var(--edge);
+  -webkit-backdrop-filter:var(--blur);backdrop-filter:var(--blur);transition:transform .25s var(--spring),opacity .15s}
+[data-theme=glass] .btn.primary{background:var(--primary);color:var(--primary-fg);border-color:transparent;
+  box-shadow:0 6px 18px color-mix(in srgb,var(--primary) 35%,transparent)}
+[data-theme=glass] .btn.danger{color:var(--danger)}
+[data-theme=glass] .btn:active{opacity:1;transform:scale(.95)}
+
+/* 內縮分組列表：一整張玻璃卡，列與列之間是髮絲線，按下有底色 */
+[data-theme=glass] .list:has(.item){background:var(--glass);border:1px solid var(--edge);box-shadow:var(--gshadow);border-radius:20px;
+  -webkit-backdrop-filter:var(--blur);backdrop-filter:var(--blur);padding:0 14px;overflow:hidden}
+[data-theme=glass] .list .item{margin:0 -14px;padding:10px 14px;transition:background-color .2s}
+[data-theme=glass] .list .item.tap:active{background:var(--press)}
+[data-theme=glass] .list .item+.item::before{content:"";position:absolute;top:0;left:80px;right:0;height:.5px;background:var(--hair)}
+[data-theme=glass] .numbered .item+.item::before{left:112px}
+[data-theme=glass] .item img{border-radius:10px;box-shadow:0 3px 10px rgba(0,0,0,.18)}
 [data-theme=glass] .item .t{font-weight:500;font-size:16px}
-[data-theme=glass] .chip img,[data-theme=glass] .show-head img{border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.45)}
-[data-theme=glass] .sec{font-size:20px;font-weight:700;color:#fff;letter-spacing:0;margin:26px 0 12px}
-[data-theme=glass] #dock{padding:0 12px calc(env(safe-area-inset-bottom) + 10px);display:flex;flex-direction:column;gap:8px;pointer-events:none}
-[data-theme=glass] #dock::before{content:"";position:absolute;left:0;right:0;bottom:0;top:-36px;z-index:-1;background:linear-gradient(transparent,rgba(11,11,15,.88) 60%)}
-[data-theme=glass] #player,[data-theme=glass] #tabs{pointer-events:auto;background:var(--glass);-webkit-backdrop-filter:blur(30px) saturate(180%);backdrop-filter:blur(30px) saturate(180%);box-shadow:var(--glass-edge);max-width:520px;width:100%;margin:0 auto}
-[data-theme=glass] #player{border-radius:22px}
+[data-theme=glass] .item.resume .idx{color:var(--accent);font-weight:700}
+[data-theme=glass] .chip img,[data-theme=glass] .show-head img{border-radius:14px;box-shadow:0 8px 24px rgba(0,0,0,.25)}
+[data-theme=glass] .chip{transition:transform .25s var(--spring)}
+[data-theme=glass] .chip:active{transform:scale(.95)}
+[data-theme=glass] .tag{background:var(--glass);border:1px solid var(--edge)}
+
+/* 分段控制：白色圓點滑到選中的那格 */
+[data-theme=glass] .seg{background:var(--glass);border:1px solid var(--edge);box-shadow:var(--gshadow);
+  -webkit-backdrop-filter:var(--blur);backdrop-filter:var(--blur)}
+[data-theme=glass] .seg button{position:relative;z-index:1;transition:color .2s ease}
+[data-theme=glass] .seg button[aria-selected=true]{color:var(--pill-ink);background:transparent}
+[data-theme=glass] .seg:not(.ready) button[aria-selected=true]{background:var(--pill)}
+[data-theme=glass] .seg .ind{display:block;top:3px;bottom:3px;border-radius:99px;background:var(--pill);box-shadow:0 3px 10px rgba(0,0,0,.14);
+  transition:transform 380ms var(--spring),width 380ms var(--spring)}
+
+/* 設定頁：iOS 設定的欄位列 */
+[data-theme=glass] .group{background:var(--glass);border:1px solid var(--edge);box-shadow:var(--gshadow);border-radius:20px;
+  -webkit-backdrop-filter:var(--blur);backdrop-filter:var(--blur);padding:0 14px;margin-bottom:12px}
+[data-theme=glass] .group label{display:flex;align-items:center;gap:12px;min-height:48px;margin:0;color:var(--fg);font-size:15px;white-space:nowrap}
+[data-theme=glass] .group label+label{box-shadow:inset 0 .5px 0 var(--hair)}
+[data-theme=glass] .group label input{margin:0;flex:1;background:transparent;border:0;border-radius:0;text-align:right;padding:10px 0;color:var(--muted-fg)}
+[data-theme=glass] .group label input:focus{color:var(--fg)}
+[data-theme=glass] .theme-card .tp{border-radius:18px}
+
+/* 底部：迷你播放列＋浮動膠囊分頁列 */
+[data-theme=glass] #dock{padding:0 12px calc(env(safe-area-inset-bottom) + 10px);display:flex;flex-direction:column;align-items:center;gap:8px;pointer-events:none}
+[data-theme=glass] #dock::before{content:"";position:absolute;left:0;right:0;bottom:0;top:-36px;z-index:-1;pointer-events:none;
+  background:linear-gradient(transparent,color-mix(in srgb,var(--bg) 80%,transparent) 65%)}
+[data-theme=glass] #player,[data-theme=glass] #tabs{pointer-events:auto;background:var(--glass-strong);border:1px solid var(--edge);
+  -webkit-backdrop-filter:blur(30px) saturate(180%);backdrop-filter:blur(30px) saturate(180%);box-shadow:0 10px 34px rgba(0,0,0,.2)}
+[data-theme=glass] #player{border-radius:22px;width:100%;max-width:520px}
 [data-theme=glass] #pArt{border-radius:8px}
 [data-theme=glass] #pBar{left:22px;right:22px}
-[data-theme=glass] #tabs{border-radius:999px;padding:4px}
-[data-theme=glass] #tabs button{height:50px;border-radius:999px}
-[data-theme=glass] #tabs button.on{background:rgba(255,255,255,.14);box-shadow:inset 0 1px 0 rgba(255,255,255,.2)}
-[data-theme=glass] #np{background:#0b0b0f;isolation:isolate}
+[data-theme=glass] #tabs{position:relative;border-radius:32px;padding:5px;width:min(360px,100%)}
+[data-theme=glass] #tabs button{position:relative;z-index:1;height:52px;border-radius:26px;transition:color .2s ease}
+[data-theme=glass] #tabs button.on{color:var(--pill-ink)}
+[data-theme=glass] #tabs:not(.ready) button.on{background:var(--pill)}
+[data-theme=glass] #tabs .ind{display:block;top:5px;bottom:5px;border-radius:26px;background:var(--pill);box-shadow:0 4px 14px rgba(0,0,0,.18);
+  transition:transform 450ms cubic-bezier(.3,1.4,.5,1),width 450ms cubic-bezier(.3,1.4,.5,1)}
+
+/* 全螢幕播放畫面 */
+[data-theme=glass] #np{background:var(--bg);isolation:isolate}
 [data-theme=glass] #np::before{content:"";position:fixed;left:50%;top:50%;width:160px;height:160px;margin:-80px;z-index:-1;background:var(--art,none) center/cover;filter:blur(12px) saturate(1.8);transform:scale(7.5);opacity:.75}
-[data-theme=glass] #np::after{content:"";position:fixed;inset:0;z-index:-1;background:linear-gradient(rgba(11,11,15,.25),rgba(11,11,15,.7))}
-[data-theme=glass] .plate{border-radius:16px;box-shadow:0 22px 50px rgba(0,0,0,.5)}
+[data-theme=glass] #np::after{content:"";position:fixed;inset:0;z-index:-1;background:var(--veil-np)}
+[data-theme=glass] .np-top .icon-btn{color:var(--fg);opacity:.55}
+[data-theme=glass] .plate{border-radius:16px;box-shadow:0 22px 50px rgba(0,0,0,.35)}
 [data-theme=glass] .spin{border-radius:16px}
+[data-theme=glass] .np-ctl .icon-btn{transition:transform .25s var(--spring)}
+[data-theme=glass] .np-ctl .icon-btn:active{opacity:1;transform:scale(.88)}
 [data-theme=glass] .np-ctl .hero{font-size:46px}
-[data-theme=glass] dialog#sheet{-webkit-backdrop-filter:blur(36px) saturate(180%);backdrop-filter:blur(36px) saturate(180%);border-radius:28px;box-shadow:var(--glass-edge)}
-[data-theme=glass] #toast{background:rgba(255,255,255,.92);color:#0b0b0f}
+
+/* 底部 sheet：較不透明的玻璃，從下面彈上來 */
+[data-theme=glass] dialog#sheet{margin:auto auto 0;width:100%;max-width:520px;border:1px solid var(--edge);border-bottom:0;border-radius:28px 28px 0 0;
+  background:var(--glass-strong);-webkit-backdrop-filter:blur(36px) saturate(180%);backdrop-filter:blur(36px) saturate(180%);
+  padding:28px 18px calc(18px + env(safe-area-inset-bottom));max-height:85dvh;box-shadow:0 -10px 40px rgba(0,0,0,.18)}
+[data-theme=glass] dialog#sheet::before{content:"";position:absolute;top:8px;left:50%;width:36px;height:5px;margin-left:-18px;border-radius:3px;background:var(--hair)}
+[data-theme=glass] dialog#sheet[open]{animation:sheet-up 460ms cubic-bezier(.32,.72,0,1)}
+[data-theme=glass] dialog#sheet::backdrop{background:rgba(0,0,0,.28);-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px);animation:fade-in .3s ease}
+@media (min-width:600px){[data-theme=glass] dialog#sheet{margin:auto;border-radius:28px;border-bottom:1px solid var(--edge)}}
+[data-theme=glass] #sheetBody .opt{background:var(--input);border:1px solid var(--edge);border-radius:14px}
+[data-theme=glass] #toast{background:var(--glass-strong);color:var(--fg);border:1px solid var(--edge);
+  -webkit-backdrop-filter:var(--blur);backdrop-filter:var(--blur);box-shadow:0 8px 24px rgba(0,0,0,.18)}
+@keyframes sheet-up{from{transform:translateY(100%)}}
+@keyframes fade-in{from{opacity:0}}
+
+/* 退路：不支援毛玻璃／系統要求降低透明度 → 半透明改實色；減少動態 → 不彈不滑 */
+@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
+  [data-theme=glass]{--glass:rgba(248,248,251,.95);--glass-strong:rgba(248,248,251,.97)}
+  [data-theme=glass][data-mode=dark]{--glass:#1e1e25;--glass-strong:#1a1a20}}
 @media (prefers-reduced-transparency:reduce){
-  [data-theme=glass]{--glass:#26262e;--pop:#26262e}
-  [data-theme=glass] #player,[data-theme=glass] #tabs,[data-theme=glass] dialog#sheet,[data-theme=glass] .btn{-webkit-backdrop-filter:none;backdrop-filter:none}}
+  [data-theme=glass] .list:has(.item),[data-theme=glass] .seg,[data-theme=glass] .group,[data-theme=glass] #player,[data-theme=glass] #tabs,
+  [data-theme=glass] dialog#sheet,[data-theme=glass] .btn,[data-theme=glass] #topbar::before{-webkit-backdrop-filter:none;backdrop-filter:none;background:var(--bg)}
+  [data-theme=glass] .btn.primary{background:var(--primary)}}
+@media (prefers-reduced-motion:reduce){
+  [data-theme=glass] .ind{transition:none!important}
+  [data-theme=glass] dialog#sheet[open]{animation:fade-in .2s ease}}
 
 /* ========== 主題二：POP（貼紙 × 粗框 × 硬陰影） ========== */
 [data-theme=pop]{
@@ -265,14 +392,15 @@ dialog#sheet::backdrop{background:rgba(0,0,0,.5)}
 /* ========== 主題三：黑膠（暖黑 × 琥珀橘；封面是唱片封套，播放中的那張會轉） ========== */
 [data-theme=vinyl]{
   --font:-apple-system,BlinkMacSystemFont,"PingFang TC","Microsoft JhengHei",system-ui,sans-serif;
-  --bg:#15110e;--fg:#f6eee2;--card:#241c16;--card-fg:#f6eee2;--pop:#2a211a;--pop-fg:#f6eee2;
-  --muted:#2a211a;--muted-fg:#b3a595;--accent:#ff8a2a;--accent-fg:#1a0f05;
-  --primary:#ff8a2a;--primary-fg:#1a0f05;--primary-line:transparent;--line:#3b2f26;--input:#241c16;--input-line:#3b2f26;
-  --danger:#ff6f61;--ok:#a5d97f;--bw:1px;--radius:18px;--radius-sm:14px;--ic-w:2;
-  --trk-on:#ff8a2a;--trk-off:#3b2f26;--trk-h:6px;--th:16px;--th-bg:#f6eee2;
+  --bg:#EDE3D3;--fg:#2A1D13;--card:#F8F1E6;--card-fg:#2A1D13;--pop:#FBF6EE;--pop-fg:#2A1D13;
+  --muted:#E3D6C3;--muted-fg:#7A6656;--accent:#E06A12;--accent-fg:#fff;
+  --primary:#E06A12;--primary-fg:#fff;--primary-line:transparent;--line:#D6C6AF;--input:#F8F1E6;--input-line:#D6C6AF;
+  --danger:#C2412F;--ok:#4F8A2B;--bw:1px;--radius:18px;--radius-sm:14px;--ic-w:2;
+  --trk-on:#E06A12;--trk-off:#D6C6AF;--trk-h:6px;--th:16px;--th-bg:#2A1D13;
   --groove:repeating-radial-gradient(circle,#0c0a08 0 2px,#221a15 2px 3px)}
-[data-theme=vinyl] body{background:radial-gradient(120% 60% at 50% -10%,#3a2415,transparent 70%),#15110e}
-[data-theme=vinyl] #topbar{background:linear-gradient(#15110e 60%,transparent)}
+[data-theme=vinyl] body{background:radial-gradient(120% 60% at 50% -10%,#FAF1E2,transparent 70%),#EDE3D3}
+[data-theme=vinyl] body::before{content:"";position:fixed;top:0;left:0;right:0;height:env(safe-area-inset-top);background:#2A1D13;z-index:12}
+[data-theme=vinyl] #topbar{background:linear-gradient(#EDE3D3 60%,transparent)}
 [data-theme=vinyl] #title{font-size:24px;font-weight:800;letter-spacing:-.01em}
 [data-theme=vinyl] #title::before{content:"";display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--accent);margin-right:10px;vertical-align:middle;position:relative;top:-2px}
 [data-theme=vinyl] #btnBack{background:var(--card);border:1px solid var(--line);min-width:44px;height:44px;font-size:20px}
@@ -286,30 +414,30 @@ dialog#sheet::backdrop{background:rgba(0,0,0,.5)}
   background:radial-gradient(circle,var(--accent) 0 16%,#0c0a08 17% 21%,transparent 22%),var(--groove);box-shadow:0 0 0 1px #4a3b30,0 2px 8px rgba(0,0,0,.5)}
 [data-theme=vinyl] .item.now .art::after{right:-28px}
 [data-theme=vinyl] .item.now .art{margin-right:28px}
-[data-theme=vinyl] .item img{position:relative;z-index:1;border-radius:6px;box-shadow:2px 0 8px rgba(0,0,0,.55)}
+[data-theme=vinyl] .item img{position:relative;z-index:1;border-radius:6px;box-shadow:2px 0 8px rgba(40,25,10,.35)}
 [data-theme=vinyl] .item .t{font-weight:700}
-[data-theme=vinyl] .chip img{border-radius:10px;box-shadow:0 8px 20px rgba(0,0,0,.5)}
-[data-theme=vinyl] .show-head img{border-radius:10px;box-shadow:0 12px 30px rgba(0,0,0,.55)}
+[data-theme=vinyl] .chip img{border-radius:10px;box-shadow:0 8px 20px rgba(60,35,15,.3)}
+[data-theme=vinyl] .show-head img{border-radius:10px;box-shadow:0 12px 30px rgba(60,35,15,.35)}
 [data-theme=vinyl] .idx{font-weight:800;color:var(--accent);font-size:15px}
-[data-theme=vinyl] #dock{background:#1c1612;border-top:1px solid var(--line)}
+[data-theme=vinyl] #dock{background:#F4EBDD;border-top:1px solid var(--line)}
 [data-theme=vinyl] #pArt{border-radius:50%;width:42px;height:42px;box-shadow:0 0 0 3px #0c0a08,0 0 0 4px var(--line)}
 [data-theme=vinyl] .p-open{padding-left:4px;gap:14px}
 [data-theme=vinyl] #pBar{top:0;bottom:auto}
 [data-theme=vinyl] #player .js-play{background:var(--accent);color:var(--accent-fg);min-width:40px;height:40px;font-size:18px;margin-right:2px}
 [data-theme=vinyl] #tabs button{position:relative}
 [data-theme=vinyl] #tabs button.on::before{content:"";position:absolute;top:0;left:50%;width:22px;height:3px;margin-left:-11px;border-radius:0 0 3px 3px;background:var(--accent)}
-[data-theme=vinyl] #np{background:radial-gradient(90% 50% at 50% 28%,#4a2c16,transparent 75%),#15110e}
-[data-theme=vinyl] .plate{border-radius:50%;box-shadow:0 0 0 2px #0c0a08,0 24px 50px rgba(0,0,0,.55)}
+[data-theme=vinyl] #np{background:radial-gradient(90% 50% at 50% 28%,#F7E0C2,transparent 75%),#EDE3D3}
+[data-theme=vinyl] .plate{border-radius:50%;box-shadow:0 0 0 2px #0c0a08,0 24px 50px rgba(60,35,15,.35)}
 [data-theme=vinyl] .spin{border-radius:50%;position:relative;background:var(--groove);will-change:transform}
 [data-theme=vinyl] .spin img{position:absolute;left:28%;top:28%;width:44%;height:44%;border-radius:50%;box-shadow:0 0 0 4px #0c0a08}
-[data-theme=vinyl] .spin::after{content:"";position:absolute;left:50%;top:50%;width:12px;height:12px;margin:-6px;border-radius:50%;background:#15110e;box-shadow:0 0 0 2px #0c0a08}
+[data-theme=vinyl] .spin::after{content:"";position:absolute;left:50%;top:50%;width:12px;height:12px;margin:-6px;border-radius:50%;background:var(--bg);box-shadow:0 0 0 2px #0c0a08}
 [data-theme=vinyl] .cover::after{content:"";position:absolute;inset:0;border-radius:50%;pointer-events:none;
   background:conic-gradient(from 20deg,transparent 0 35deg,rgba(255,240,220,.13) 55deg,transparent 80deg 200deg,rgba(255,240,220,.10) 225deg,transparent 255deg)}
 [data-theme=vinyl] .spin,[data-theme=vinyl] #pArt{animation:spin 10s linear infinite;animation-play-state:paused}
 [data-theme=vinyl] .playing .disc[data-k="0"] .spin,[data-theme=vinyl] .playing #pArt{animation-play-state:running}
 [data-theme=vinyl] .np-ctl .hero{background:var(--accent);color:var(--accent-fg);font-size:34px}
 [data-theme=vinyl] #npTitle{font-size:22px;font-weight:800}
-[data-theme=vinyl] dialog#sheet{box-shadow:0 24px 60px rgba(0,0,0,.6)}
+[data-theme=vinyl] dialog#sheet{box-shadow:0 24px 60px rgba(60,35,15,.3)}
 @keyframes spin{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion:reduce){[data-theme=vinyl] .spin,[data-theme=vinyl] #pArt{animation:none!important}}
 
