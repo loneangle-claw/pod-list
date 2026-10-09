@@ -68,7 +68,7 @@ function toast(msg) {
 }
 
 /* ---------- 資料 ---------- */
-const BUILD = '15';
+const BUILD = '16';
 const emptyData = () => ({ version: 1, updatedAt: 0, shows: [], lists: [], excludes: {}, skips: {} });   // excludes：{ 節目id: [排除詞] }；skips：{ 節目id: 片頭秒數 }
 const key = x => String(x && x.id);
 function uniq(arr) {                    // 依 id 去重，保留先出現的
@@ -785,37 +785,61 @@ function mediaSession(e) {
 /* ---------- 子母畫面（PiP） ----------
    音檔沒有畫面可縮，所以兩條路：
    ① Document PiP（桌面 Chrome/Edge）：開一個小視窗放封面＋按鍵，可以直接操作。
-   ② 其他（iPhone Safari、Android Chrome）：把封面＋標題＋進度畫到 canvas，轉成靜音 video 再進子母畫面；
-      聲音仍由 <audio> 出，video 的播放／暫停跟 audio 互相連動。 */
+   ② 其他（iPhone Safari、Android Chrome）：把封面＋標題畫到 canvas，用 MediaRecorder 錄成 1.5 秒的小影片（blob），
+      靜音循環播放後進子母畫面；聲音仍由 <audio> 出，video 的播放／暫停跟 audio 互相連動。
+      iOS 不讓「canvas 即時串流」的 video 進子母畫面（v15 真機報 does not support），所以改錄成真的影片檔；
+      也因為是錄好的畫面，子母畫面裡不會有即時進度。 */
 const docPiP = 'documentPictureInPicture' in window;
 const pipVideo = document.createElement('video');
-pipVideo.muted = true; pipVideo.playsInline = true; pipVideo.setAttribute('playsinline', '');
-const vidPiP = !!(document.pictureInPictureEnabled || pipVideo.webkitSupportsPresentationMode) && !!HTMLCanvasElement.prototype.captureStream;
-let pipWin = null, pipCanvas = null, pipImg = null, pipLast = 0;
+pipVideo.muted = true; pipVideo.playsInline = true; pipVideo.loop = true; pipVideo.setAttribute('playsinline', '');
+const recMime = window.MediaRecorder && ['video/mp4', 'video/webm;codecs=vp8', 'video/webm'].find(m => MediaRecorder.isTypeSupported(m));
+const vidPiP = !!(document.pictureInPictureEnabled || pipVideo.webkitSupportsPresentationMode) && !!HTMLCanvasElement.prototype.captureStream && !!recMime;
+let pipWin = null, pipLast = 0, clipFor = null, clipBusy = false, clipUrl = '';
 const pipOnVideo = () => document.pictureInPictureElement === pipVideo || pipVideo.webkitPresentationMode === 'picture-in-picture';
 const pipOn = () => !!pipWin || pipOnVideo();
 function pipBtn() { $('#npPip').setAttribute('aria-pressed', String(pipOn())); $('#npPip').classList.toggle('primary', pipOn()); }
 
-function pipDraw() {
-  const c = pipCanvas, e = nowEp();
-  if (!c || !e) return;
+function pipDraw(c, e, img) {
   const g = c.getContext('2d'), W = c.width, H = c.height;
   g.fillStyle = '#111'; g.fillRect(0, 0, W, H);
-  if (pipImg && pipImg.complete && pipImg.naturalWidth) g.drawImage(pipImg, 0, 0, H, H);
-  const x = H + 22, mw = W - x - 22;
+  if (img && img.naturalWidth) g.drawImage(img, 0, 0, H, H);
+  const x = H + 24, mw = W - x - 24;
   const fit = (t, font, y) => {
     g.font = font; let s = t;
     while (s.length > 1 && g.measureText(s + '…').width > mw) s = s.slice(0, -1);
     g.fillText(s === t ? t : s + '…', x, y);
   };
-  g.fillStyle = '#fff'; fit(e.title, '600 30px system-ui, sans-serif', 70);
-  g.fillStyle = 'rgba(255,255,255,.65)'; fit(e.show, '24px system-ui, sans-serif', 110);
-  const d = dur(), pc = d ? Math.min(1, audio.currentTime / d) : 0;
-  g.fillStyle = 'rgba(255,255,255,.22)'; g.fillRect(x, H - 62, mw, 6);
-  g.fillStyle = '#fff'; g.fillRect(x, H - 62, mw * pc, 6);
-  g.fillStyle = 'rgba(255,255,255,.75)'; g.font = '22px system-ui, sans-serif';
-  g.fillText(`${fmtT(audio.currentTime)} / ${fmtT(d)}`, x, H - 24);
-  if (audio.paused) { g.textAlign = 'right'; g.fillText('已暫停', W - 22, H - 24); g.textAlign = 'left'; }
+  g.fillStyle = '#fff'; fit(e.title, '600 30px system-ui, sans-serif', H / 2 - 6);
+  g.fillStyle = 'rgba(255,255,255,.65)'; fit(e.show, '24px system-ui, sans-serif', H / 2 + 34);
+}
+async function buildClip() {             // 每換一集就重錄一段（只在支援的平台、播過之後才做）
+  const e = nowEp();
+  if (!vidPiP || docPiP || !e || clipFor === e.id || clipBusy) return;
+  clipBusy = true;
+  try {
+    const img = new Image(); img.crossOrigin = 'anonymous';   // mzstatic 回 CORS *，canvas 不會被污染
+    await new Promise(r => { img.onload = img.onerror = r; img.src = bigArt(e.art); });
+    const c = document.createElement('canvas'); c.width = 640; c.height = 240;
+    pipDraw(c, e, img);
+    const rec = new MediaRecorder(c.captureStream(15), { mimeType: recMime }), parts = [];
+    rec.ondataavailable = ev => ev.data.size && parts.push(ev.data);
+    const done = new Promise(r => rec.onstop = r);
+    rec.start();
+    const iv = setInterval(() => pipDraw(c, e, img), 100);   // canvas 有重畫才會出新的影格
+    await new Promise(r => setTimeout(r, 1500));
+    clearInterval(iv); rec.stop(); await done;
+    const url = URL.createObjectURL(new Blob(parts, { type: recMime.split(';')[0] }));
+    if (!pipVideo.isConnected) {
+      pipVideo.style.cssText = 'position:fixed;left:0;bottom:0;width:2px;height:2px;opacity:0;pointer-events:none';
+      document.body.append(pipVideo);    // iOS 不在 DOM 裡的 video 進不了子母畫面
+    }
+    pipVideo.src = url;
+    if (clipUrl) URL.revokeObjectURL(clipUrl);
+    clipUrl = url; clipFor = e.id;
+    if (!pipOnVideo() || !audio.paused) pipVideo.play().catch(() => {});
+  } catch (err) { console.warn('PiP clip', err); }
+  clipBusy = false;
+  if (nowEp() && nowEp().id !== clipFor) buildClip();   // 錄的途中又換集了
 }
 function pipPaint() {                    // 換集時更新封面與標題
   if (!pipOn()) return;
@@ -824,10 +848,6 @@ function pipPaint() {                    // 換集時更新封面與標題
   if (pipWin) {
     const d = pipWin.document;
     d.getElementById('art').src = bigArt(e.art); d.getElementById('t').textContent = e.title; d.getElementById('s').textContent = e.show;
-  }
-  if (pipCanvas) {
-    pipImg = new Image(); pipImg.crossOrigin = 'anonymous';   // mzstatic 回 CORS *，canvas 不會被污染
-    pipImg.onload = pipDraw; pipImg.src = bigArt(e.art);
   }
   pipLast = 0; pipSync(); pipTick();
 }
@@ -839,13 +859,11 @@ function pipSync() {                     // audio 狀態 → PiP 畫面
   if (pipOnVideo()) {
     if (audio.paused && !pipVideo.paused) pipVideo.pause();
     else if (!audio.paused && pipVideo.paused) pipVideo.play().catch(() => {});
-    pipDraw();
   }
 }
 function pipTick() {                     // 進度每秒重畫一次就夠
   if (!pipOn() || Date.now() - pipLast < 1000) return;
   pipLast = Date.now();
-  if (pipOnVideo()) pipDraw();
   if (pipWin) pipWin.document.getElementById('bar').style.width = (dur() ? Math.min(100, audio.currentTime / dur() * 100) : 0) + '%';
 }
 // 使用者在子母畫面按播放／暫停：video 先變，再帶動 audio
@@ -875,17 +893,8 @@ async function openDocPiP() {
   pipWin.addEventListener('pagehide', () => { pipWin = null; pipBtn(); });
   pipPaint();
 }
-function prepVidPiP() {                 // iOS 要求「點擊當下同步」呼叫 PiP，且 video 必須已經有畫面 → 先把 video 準備好
-  if (pipCanvas) return;
-  pipCanvas = document.createElement('canvas'); pipCanvas.width = 640; pipCanvas.height = 240;
-  pipVideo.srcObject = pipCanvas.captureStream(4);
-  pipVideo.style.cssText = 'position:fixed;left:0;bottom:0;width:2px;height:2px;opacity:0;pointer-events:none';
-  document.body.append(pipVideo);        // iOS 不在 DOM 裡的 video 進不了子母畫面
-  pipDraw();
-  pipVideo.play().catch(() => {});       // 靜音 inline 播放不需要使用者手勢
-}
 function openVidPiP() {                  // 不可以有任何 await 在 PiP 呼叫之前，否則 iOS 判定「不是使用者觸發」
-  prepVidPiP(); pipDraw();
+  if (pipVideo.readyState < 2) { buildClip(); throw new Error('還在準備'); }
   if (pipVideo.paused) pipVideo.play().catch(() => {});
   const r = pipVideo.webkitSetPresentationMode && pipVideo.webkitSupportsPresentationMode('picture-in-picture')
     ? pipVideo.webkitSetPresentationMode('picture-in-picture') : pipVideo.requestPictureInPicture();
@@ -898,13 +907,13 @@ async function togglePiP() {
     else if (pipOnVideo()) { if (document.pictureInPictureElement) await document.exitPictureInPicture(); else pipVideo.webkitSetPresentationMode('inline'); }
     else if (docPiP) await openDocPiP();
     else await openVidPiP();
-  } catch (err) { toast(pipCanvas && pipVideo.readyState < 2 ? '子母畫面還在準備，請再按一次' : '無法開啟子母畫面：' + (err.message || err.name)); }
+  } catch (err) { toast(!docPiP && pipVideo.readyState < 2 ? '子母畫面還在準備，約 2 秒後再按一次' : '無法開啟子母畫面：' + (err.message || err.name)); }
   pipBtn();
 }
 $('#npPip').prepend(icon('pip'));
 $('#npPip').hidden = !(docPiP || vidPiP);
 $('#npPip').onclick = togglePiP;
-if (!docPiP && vidPiP) audio.addEventListener('play', prepVidPiP, { once: true });   // 第一次播放時就先備好，按鈕才能一按即開
+if (!docPiP && vidPiP) audio.addEventListener('play', buildClip);   // 播放時就先把這集的小影片錄好，按鈕才能一按即開（已錄過會直接略過）
 
 /* ---------- 外觀主題 ---------- */
 const THEMES = { glass: null, pop: '#FFF1DC', vinyl: '#3A2C22' };   // 玻璃依淺色／深色另算
