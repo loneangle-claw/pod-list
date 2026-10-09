@@ -39,8 +39,7 @@ const IC = {
   down: '<path d="M12 5v13.5M6 13l6 6 6-6"/>',
   close: '<path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/>',
   star: '<path d="M12 3.8l2.55 5.17 5.7.83-4.12 4.02.97 5.68L12 16.82 6.9 19.5l.97-5.68L3.75 9.8l5.7-.83z"/>',
-  pip: '<rect x="3" y="5" width="18" height="14" rx="2.2"/><rect class="f" x="11.5" y="11" width="7" height="5.5" rx="1"/>',
-  skipIntro: '<path d="M4 6.5v11"/><path class="f" d="M7.5 6.9v10.2a.8.8 0 0 0 1.25.66l7.4-5.1a.8.8 0 0 0 0-1.32l-7.4-5.1a.8.8 0 0 0-1.25.66z"/><path d="M19.5 6.5v11"/>',
+  share: '<path d="M12 3.5v11.5M8 7.5l4-4 4 4"/><path d="M8.5 10.5H7a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2h-1.5"/>',
   starFill: '<path class="f" d="M12 3.8l2.55 5.17 5.7.83-4.12 4.02.97 5.68L12 16.82 6.9 19.5l.97-5.68L3.75 9.8l5.7-.83z"/>'
 };
 function icon(name) {
@@ -68,8 +67,8 @@ function toast(msg) {
 }
 
 /* ---------- 資料 ---------- */
-const BUILD = '16';
-const emptyData = () => ({ version: 1, updatedAt: 0, shows: [], lists: [], excludes: {}, skips: {} });   // excludes：{ 節目id: [排除詞] }；skips：{ 節目id: 片頭秒數 }
+const BUILD = '17';
+const emptyData = () => ({ version: 1, updatedAt: 0, shows: [], lists: [], excludes: {} });   // excludes：{ 節目id: [排除詞] }
 const key = x => String(x && x.id);
 function uniq(arr) {                    // 依 id 去重，保留先出現的
   const seen = new Set();
@@ -79,8 +78,7 @@ function sanitize(d) {                  // 任何進入 data 的來源（本機�
   d.shows = uniq(d.shows);
   d.lists = (d.lists || []).filter(l => l && l.id).map(l => (l.items = uniq(l.items), l));
   if (!d.excludes || typeof d.excludes !== 'object' || Array.isArray(d.excludes)) d.excludes = {};
-  if (!d.skips || typeof d.skips !== 'object' || Array.isArray(d.skips)) d.skips = {};
-  for (const [k, v] of Object.entries(d.skips)) if (!(Number(v) > 0)) delete d.skips[k];
+  delete d.skips;                       // v14–v16 的「跳過片頭」已移除，順手清掉舊資料
   return d;
 }
 let data = sanitize(Object.assign(emptyData(), jget(LS_DATA, {})));
@@ -306,40 +304,11 @@ function setExcl(id, terms) {
 function renderExcl() {
   const id = curShow.id, terms = exclOf(id);
   const hidden = terms.length ? curEpisodes.filter(isExcluded).length : 0;
-  const sk = skipOf(id);
   $('#excl').replaceChildren(
-    h('button', { class: 'btn sm' + (sk ? ' primary' : ''), onclick: () => editSkip(id, curShow.name) }, icon('skipIntro'), sk ? `片頭 ${fmtT(sk)}` : '跳過片頭'),
     h('button', { class: 'btn sm', onclick: addExcl }, icon('plus'), '排除詞'),
     ...terms.map(t => h('span', { class: 'tag' }, t,
       h('button', { class: 'icon-btn', 'aria-label': `取消排除 ${t}`, onclick: () => setExcl(id, terms.filter(x => x !== t)) }, icon('close')))),
     ...(terms.length ? [h('span', { class: 'excl-n' }, `已隱藏 ${hidden} 集`)] : []));
-}
-/* 跳過片頭（前置廣告）：每個節目各記一個秒數，新開一集（沒有續播點）時直接從這裡開始；跟著清單資料一起同步 */
-const skipOf = id => Number(data.skips[id]) || 0;
-function setSkip(id, sec) {
-  sec = Math.max(0, Math.round(sec));
-  if (sec) data.skips[id] = sec; else delete data.skips[id];
-  commit(); paintSkipBtn();
-  if (curView === 'show' && curShow && String(curShow.id) === String(id)) renderExcl();
-}
-const parseT = v => {                    // 「90」或「1:30」都吃
-  const parts = String(v).trim().split(/[:：]/).map(Number);
-  if (!parts.length || parts.some(n => !isFinite(n) || n < 0)) return NaN;
-  return parts.reduce((a, n) => a * 60 + n, 0);
-};
-function editSkip(id, name) {
-  openSheet(`跳過片頭 · ${name}`, body => {
-    const inp = h('input', { type: 'text', inputmode: 'numeric', placeholder: '秒數或 分:秒，例如 1:30', value: skipOf(id) ? fmtT(skipOf(id)) : '', maxlength: 8 });
-    const ok = v => { const t = parseT(v); if (!isFinite(t)) return toast('格式不對'); closeSheet(); setSkip(id, t); toast(t ? `之後新開的集數從 ${fmtT(t)} 開始` : '已取消跳過片頭'); };
-    inp.onkeydown = e => { if (e.key === 'Enter') ok(inp.value); };
-    const e = nowEp(), here = e && String(e.showId) === String(id) && audio.currentTime > 1;
-    body.append(h('p', { class: 'hint', style: 'margin:0 0 10px' }, '這個節目新開的每一集都直接跳到這個時間（有續播點的集數照舊接著聽）。'), inp,
-      h('div', { class: 'row', style: 'margin:12px 0 0' },
-        h('button', { class: 'btn primary', onclick: () => ok(inp.value) }, '儲存'),
-        here ? h('button', { class: 'btn', onclick: () => ok(Math.floor(audio.currentTime)) }, `設為現在 ${fmtT(audio.currentTime)}`) : null,
-        skipOf(id) ? h('button', { class: 'btn danger', onclick: () => ok(0) }, '取消跳過') : null,
-        h('button', { class: 'btn', onclick: closeSheet }, '取消')));
-  });
 }
 function addExcl() {
   openSheet('排除標題含這些詞的單集', body => {
@@ -667,17 +636,14 @@ function loadEp(autoplay) {
   seekOnce = null;
   audio.removeEventListener('loadedmetadata', onMeta);   // 上一集還沒載完就換集時，舊的跳秒不可套到新的一集
   onMeta = () => {
-    let t = p > 10 ? p : 0;
-    const sk = skipOf(e.showId);
-    if (t < sk) t = sk;                    // 跳過片頭：還沒聽過片頭之後的，一律從片頭結束處開始
-    if (nowEp() === e && t > 0 && (!isFinite(audio.duration) || t < audio.duration - 30)) audio.currentTime = t;
+    if (nowEp() === e && p > 10 && (!isFinite(audio.duration) || p < audio.duration - 30)) audio.currentTime = p;
     audio.playbackRate = rate;
   };
   audio.addEventListener('loadedmetadata', onMeta, { once: true });
   if (autoplay) audio.play().catch(err => { if (err.name !== 'AbortError') toast('無法播放這一集'); });
   jset(LS_LAST, { queue, qi, listId: qList });
   if (autoplay && qList) { const l = getList(qList); if (l && l.items.some(x => key(x) === key(e))) { l.resume = { id: e.id, t: Math.floor(p) }; commit(); } }
-  setPlayIcons(); paintProgress(0); markNow(); mediaSession(e); paintSkipBtn(); pipPaint(true);
+  setPlayIcons(); paintProgress(0); markNow(); mediaSession(e);
 }
 function playQueue(q, i, restart, listId) {
   if (i < 0 || !q[i]) return;
@@ -733,11 +699,8 @@ $('#pRate').onclick = () => openSheet('播放速度', body => {
 $('#pOpen').onclick = openNP;
 $('#npClose').onclick = closeNP;
 $('#npAdd').onclick = () => { if (nowEp()) pickList(nowEp()); };
-$('#npSkip').prepend(icon('skipIntro'));
-$('#npSkip').onclick = () => { const e = nowEp(); if (e) editSkip(e.showId, e.show); };
-function paintSkipBtn() { const e = nowEp(), sk = e ? skipOf(e.showId) : 0; $('#npSkipT').textContent = sk ? fmtT(sk) : '片頭'; $('#npSkip').classList.toggle('primary', !!sk); }
 audio.onplay = audio.onpause = () => {
-  setPlayIcons(); pipSync(); document.body.classList.toggle('playing', !audio.paused);
+  setPlayIcons(); document.body.classList.toggle('playing', !audio.paused);
   if (audio.paused && !audio.ended) { savePos(); touchResume(true); }
   else if (!audio.paused) touchResume(false);   // 一開始播就把續播點指到這集（只寫本機，暫停時才上傳）
   if (curView === 'list') paintResume();
@@ -757,7 +720,6 @@ audio.ontimeupdate = () => {
   if (!seeking) { $('#seek').value = d ? audio.currentTime / d * 1000 : 0; paintProgress(); }
   $('#tCur').textContent = fmtT(audio.currentTime);
   $('#tRem').textContent = '-' + fmtT(Math.max(0, d - audio.currentTime));
-  pipTick();
   if (Date.now() - lastSave > 5000) { lastSave = Date.now(); savePos(); touchResume(false); }
 };
 $('#seek').oninput = () => { seeking = true; paintProgress($('#seek').value / 10); };
@@ -781,139 +743,6 @@ function mediaSession(e) {
   set('previoustrack', () => $('#pPrev').click());
   set('nexttrack', () => $('#pNext').click());
 }
-
-/* ---------- 子母畫面（PiP） ----------
-   音檔沒有畫面可縮，所以兩條路：
-   ① Document PiP（桌面 Chrome/Edge）：開一個小視窗放封面＋按鍵，可以直接操作。
-   ② 其他（iPhone Safari、Android Chrome）：把封面＋標題畫到 canvas，用 MediaRecorder 錄成 1.5 秒的小影片（blob），
-      靜音循環播放後進子母畫面；聲音仍由 <audio> 出，video 的播放／暫停跟 audio 互相連動。
-      iOS 不讓「canvas 即時串流」的 video 進子母畫面（v15 真機報 does not support），所以改錄成真的影片檔；
-      也因為是錄好的畫面，子母畫面裡不會有即時進度。 */
-const docPiP = 'documentPictureInPicture' in window;
-const pipVideo = document.createElement('video');
-pipVideo.muted = true; pipVideo.playsInline = true; pipVideo.loop = true; pipVideo.setAttribute('playsinline', '');
-const recMime = window.MediaRecorder && ['video/mp4', 'video/webm;codecs=vp8', 'video/webm'].find(m => MediaRecorder.isTypeSupported(m));
-const vidPiP = !!(document.pictureInPictureEnabled || pipVideo.webkitSupportsPresentationMode) && !!HTMLCanvasElement.prototype.captureStream && !!recMime;
-let pipWin = null, pipLast = 0, clipFor = null, clipBusy = false, clipUrl = '';
-const pipOnVideo = () => document.pictureInPictureElement === pipVideo || pipVideo.webkitPresentationMode === 'picture-in-picture';
-const pipOn = () => !!pipWin || pipOnVideo();
-function pipBtn() { $('#npPip').setAttribute('aria-pressed', String(pipOn())); $('#npPip').classList.toggle('primary', pipOn()); }
-
-function pipDraw(c, e, img) {
-  const g = c.getContext('2d'), W = c.width, H = c.height;
-  g.fillStyle = '#111'; g.fillRect(0, 0, W, H);
-  if (img && img.naturalWidth) g.drawImage(img, 0, 0, H, H);
-  const x = H + 24, mw = W - x - 24;
-  const fit = (t, font, y) => {
-    g.font = font; let s = t;
-    while (s.length > 1 && g.measureText(s + '…').width > mw) s = s.slice(0, -1);
-    g.fillText(s === t ? t : s + '…', x, y);
-  };
-  g.fillStyle = '#fff'; fit(e.title, '600 30px system-ui, sans-serif', H / 2 - 6);
-  g.fillStyle = 'rgba(255,255,255,.65)'; fit(e.show, '24px system-ui, sans-serif', H / 2 + 34);
-}
-async function buildClip() {             // 每換一集就重錄一段（只在支援的平台、播過之後才做）
-  const e = nowEp();
-  if (!vidPiP || docPiP || !e || clipFor === e.id || clipBusy) return;
-  clipBusy = true;
-  try {
-    const img = new Image(); img.crossOrigin = 'anonymous';   // mzstatic 回 CORS *，canvas 不會被污染
-    await new Promise(r => { img.onload = img.onerror = r; img.src = bigArt(e.art); });
-    const c = document.createElement('canvas'); c.width = 640; c.height = 240;
-    pipDraw(c, e, img);
-    const rec = new MediaRecorder(c.captureStream(15), { mimeType: recMime }), parts = [];
-    rec.ondataavailable = ev => ev.data.size && parts.push(ev.data);
-    const done = new Promise(r => rec.onstop = r);
-    rec.start();
-    const iv = setInterval(() => pipDraw(c, e, img), 100);   // canvas 有重畫才會出新的影格
-    await new Promise(r => setTimeout(r, 1500));
-    clearInterval(iv); rec.stop(); await done;
-    const url = URL.createObjectURL(new Blob(parts, { type: recMime.split(';')[0] }));
-    if (!pipVideo.isConnected) {
-      pipVideo.style.cssText = 'position:fixed;left:0;bottom:0;width:2px;height:2px;opacity:0;pointer-events:none';
-      document.body.append(pipVideo);    // iOS 不在 DOM 裡的 video 進不了子母畫面
-    }
-    pipVideo.src = url;
-    if (clipUrl) URL.revokeObjectURL(clipUrl);
-    clipUrl = url; clipFor = e.id;
-    if (!pipOnVideo() || !audio.paused) pipVideo.play().catch(() => {});
-  } catch (err) { console.warn('PiP clip', err); }
-  clipBusy = false;
-  if (nowEp() && nowEp().id !== clipFor) buildClip();   // 錄的途中又換集了
-}
-function pipPaint() {                    // 換集時更新封面與標題
-  if (!pipOn()) return;
-  const e = nowEp();
-  if (!e) return;
-  if (pipWin) {
-    const d = pipWin.document;
-    d.getElementById('art').src = bigArt(e.art); d.getElementById('t').textContent = e.title; d.getElementById('s').textContent = e.show;
-  }
-  pipLast = 0; pipSync(); pipTick();
-}
-function pipSync() {                     // audio 狀態 → PiP 畫面
-  if (pipWin) {
-    const b = pipWin.document.getElementById('pp');
-    if (b) b.replaceChildren(icon(audio.paused ? 'play' : 'pause'));
-  }
-  if (pipOnVideo()) {
-    if (audio.paused && !pipVideo.paused) pipVideo.pause();
-    else if (!audio.paused && pipVideo.paused) pipVideo.play().catch(() => {});
-  }
-}
-function pipTick() {                     // 進度每秒重畫一次就夠
-  if (!pipOn() || Date.now() - pipLast < 1000) return;
-  pipLast = Date.now();
-  if (pipWin) pipWin.document.getElementById('bar').style.width = (dur() ? Math.min(100, audio.currentTime / dur() * 100) : 0) + '%';
-}
-// 使用者在子母畫面按播放／暫停：video 先變，再帶動 audio
-pipVideo.onplay = () => { if (pipOnVideo() && audio.paused) audio.play().catch(() => {}); };
-pipVideo.onpause = () => { if (pipOnVideo() && !audio.paused) audio.pause(); };
-for (const ev of ['enterpictureinpicture', 'leavepictureinpicture', 'webkitpresentationmodechanged']) pipVideo.addEventListener(ev, pipBtn);
-
-async function openDocPiP() {
-  pipWin = await documentPictureInPicture.requestWindow({ width: 360, height: 124 });
-  const d = pipWin.document;
-  const st = d.createElement('style');
-  st.textContent = `body{margin:0;display:flex;gap:10px;align-items:center;padding:10px;background:#111;color:#fff;font:14px system-ui,sans-serif;height:100vh;box-sizing:border-box;overflow:hidden}
-    img{width:calc(100vh - 20px);height:calc(100vh - 20px);border-radius:8px;object-fit:cover;flex:none}
-    .m{flex:1;min-width:0}.t,.s{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.t{font-weight:600}.s{opacity:.65;font-size:12px;margin-top:2px}
-    .track{height:3px;background:rgba(255,255,255,.2);border-radius:2px;margin:8px 0 4px}#bar{height:100%;width:0;background:#fff;border-radius:2px}
-    .c{display:flex;gap:2px}button{background:none;border:0;color:#fff;width:36px;height:36px;border-radius:50%;cursor:pointer;display:grid;place-items:center;padding:0}
-    button:hover{background:rgba(255,255,255,.12)}.ic{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
-    .ic .f{fill:currentColor;stroke:none}.ic text{font:700 7px system-ui,sans-serif;fill:currentColor;stroke:none}`;
-  d.head.append(st);
-  const btn = (id, ic, f, label) => h('button', { id, 'aria-label': label, onclick: f }, ic ? icon(ic) : null);
-  // h() 用主頁的 document 建元素，append 進 PiP 視窗會自動 adopt
-  d.body.replaceChildren(h('img', { id: 'art', alt: '' }),
-    h('div', { class: 'm' }, h('div', { class: 't', id: 't' }), h('div', { class: 's', id: 's' }),
-      h('div', { class: 'track' }, h('div', { id: 'bar' })),
-      h('div', { class: 'c' }, btn('pv', 'prev', () => $('#pPrev').click(), '上一集'), btn('bk', 'back15', () => skip(-15), '倒退 15 秒'),
-        btn('pp', null, toggle, '播放／暫停'), btn('fw', 'fwd30', () => skip(30), '快轉 30 秒'), btn('nx', 'next', () => step(1), '下一集'))));
-  pipWin.addEventListener('pagehide', () => { pipWin = null; pipBtn(); });
-  pipPaint();
-}
-function openVidPiP() {                  // 不可以有任何 await 在 PiP 呼叫之前，否則 iOS 判定「不是使用者觸發」
-  if (pipVideo.readyState < 2) { buildClip(); throw new Error('還在準備'); }
-  if (pipVideo.paused) pipVideo.play().catch(() => {});
-  const r = pipVideo.webkitSetPresentationMode && pipVideo.webkitSupportsPresentationMode('picture-in-picture')
-    ? pipVideo.webkitSetPresentationMode('picture-in-picture') : pipVideo.requestPictureInPicture();
-  return Promise.resolve(r).then(() => { pipPaint(); if (audio.paused) pipVideo.pause(); });
-}
-async function togglePiP() {
-  if (!nowEp()) return;
-  try {
-    if (pipWin) { pipWin.close(); pipWin = null; }
-    else if (pipOnVideo()) { if (document.pictureInPictureElement) await document.exitPictureInPicture(); else pipVideo.webkitSetPresentationMode('inline'); }
-    else if (docPiP) await openDocPiP();
-    else await openVidPiP();
-  } catch (err) { toast(!docPiP && pipVideo.readyState < 2 ? '子母畫面還在準備，約 2 秒後再按一次' : '無法開啟子母畫面：' + (err.message || err.name)); }
-  pipBtn();
-}
-$('#npPip').prepend(icon('pip'));
-$('#npPip').hidden = !(docPiP || vidPiP);
-$('#npPip').onclick = togglePiP;
-if (!docPiP && vidPiP) audio.addEventListener('play', buildClip);   // 播放時就先把這集的小影片錄好，按鈕才能一按即開（已錄過會直接略過）
 
 /* ---------- 外觀主題 ---------- */
 const THEMES = { glass: null, pop: '#FFF1DC', vinyl: '#3A2C22' };   // 玻璃依淺色／深色另算
@@ -988,6 +817,17 @@ $('#fileImport').onchange = async e => {
     data = sanitize(Object.assign(emptyData(), j)); commit(); renderAll(); toast('已匯入');
   } catch { toast('檔案格式不對'); }
   e.target.value = '';
+};
+
+/* ---------- 分享網址 ---------- */
+const APP_URL = location.origin + location.pathname.replace(/index\.html$/, '');   // 不帶 ?r= 之類的參數
+$('#btnShare').onclick = async () => {
+  if (navigator.share) {
+    try { await navigator.share({ title: 'POD·LIST', text: 'POD·LIST：把 Podcast 單集排成自己的清單', url: APP_URL }); } catch {}   // 使用者取消分享不算錯
+    return;
+  }
+  try { await navigator.clipboard.writeText(APP_URL); toast('網址已複製'); }
+  catch { prompt('複製這個網址', APP_URL); }
 };
 
 /* ---------- 啟動 ---------- */
