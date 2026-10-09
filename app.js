@@ -39,6 +39,8 @@ const IC = {
   down: '<path d="M12 5v13.5M6 13l6 6 6-6"/>',
   close: '<path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/>',
   star: '<path d="M12 3.8l2.55 5.17 5.7.83-4.12 4.02.97 5.68L12 16.82 6.9 19.5l.97-5.68L3.75 9.8l5.7-.83z"/>',
+  pip: '<rect x="3" y="5" width="18" height="14" rx="2.2"/><rect class="f" x="11.5" y="11" width="7" height="5.5" rx="1"/>',
+  skipIntro: '<path d="M4 6.5v11"/><path class="f" d="M7.5 6.9v10.2a.8.8 0 0 0 1.25.66l7.4-5.1a.8.8 0 0 0 0-1.32l-7.4-5.1a.8.8 0 0 0-1.25.66z"/><path d="M19.5 6.5v11"/>',
   starFill: '<path class="f" d="M12 3.8l2.55 5.17 5.7.83-4.12 4.02.97 5.68L12 16.82 6.9 19.5l.97-5.68L3.75 9.8l5.7-.83z"/>'
 };
 function icon(name) {
@@ -66,8 +68,8 @@ function toast(msg) {
 }
 
 /* ---------- 資料 ---------- */
-const BUILD = '13';
-const emptyData = () => ({ version: 1, updatedAt: 0, shows: [], lists: [], excludes: {} });   // excludes：{ 節目id: [排除詞] }
+const BUILD = '14';
+const emptyData = () => ({ version: 1, updatedAt: 0, shows: [], lists: [], excludes: {}, skips: {} });   // excludes：{ 節目id: [排除詞] }；skips：{ 節目id: 片頭秒數 }
 const key = x => String(x && x.id);
 function uniq(arr) {                    // 依 id 去重，保留先出現的
   const seen = new Set();
@@ -77,6 +79,8 @@ function sanitize(d) {                  // 任何進入 data 的來源（本機�
   d.shows = uniq(d.shows);
   d.lists = (d.lists || []).filter(l => l && l.id).map(l => (l.items = uniq(l.items), l));
   if (!d.excludes || typeof d.excludes !== 'object' || Array.isArray(d.excludes)) d.excludes = {};
+  if (!d.skips || typeof d.skips !== 'object' || Array.isArray(d.skips)) d.skips = {};
+  for (const [k, v] of Object.entries(d.skips)) if (!(Number(v) > 0)) delete d.skips[k];
   return d;
 }
 let data = sanitize(Object.assign(emptyData(), jget(LS_DATA, {})));
@@ -302,11 +306,40 @@ function setExcl(id, terms) {
 function renderExcl() {
   const id = curShow.id, terms = exclOf(id);
   const hidden = terms.length ? curEpisodes.filter(isExcluded).length : 0;
+  const sk = skipOf(id);
   $('#excl').replaceChildren(
+    h('button', { class: 'btn sm' + (sk ? ' primary' : ''), onclick: () => editSkip(id, curShow.name) }, icon('skipIntro'), sk ? `片頭 ${fmtT(sk)}` : '跳過片頭'),
     h('button', { class: 'btn sm', onclick: addExcl }, icon('plus'), '排除詞'),
     ...terms.map(t => h('span', { class: 'tag' }, t,
       h('button', { class: 'icon-btn', 'aria-label': `取消排除 ${t}`, onclick: () => setExcl(id, terms.filter(x => x !== t)) }, icon('close')))),
     ...(terms.length ? [h('span', { class: 'excl-n' }, `已隱藏 ${hidden} 集`)] : []));
+}
+/* 跳過片頭（前置廣告）：每個節目各記一個秒數，新開一集（沒有續播點）時直接從這裡開始；跟著清單資料一起同步 */
+const skipOf = id => Number(data.skips[id]) || 0;
+function setSkip(id, sec) {
+  sec = Math.max(0, Math.round(sec));
+  if (sec) data.skips[id] = sec; else delete data.skips[id];
+  commit(); paintSkipBtn();
+  if (curView === 'show' && curShow && String(curShow.id) === String(id)) renderExcl();
+}
+const parseT = v => {                    // 「90」或「1:30」都吃
+  const parts = String(v).trim().split(/[:：]/).map(Number);
+  if (!parts.length || parts.some(n => !isFinite(n) || n < 0)) return NaN;
+  return parts.reduce((a, n) => a * 60 + n, 0);
+};
+function editSkip(id, name) {
+  openSheet(`跳過片頭 · ${name}`, body => {
+    const inp = h('input', { type: 'text', inputmode: 'numeric', placeholder: '秒數或 分:秒，例如 1:30', value: skipOf(id) ? fmtT(skipOf(id)) : '', maxlength: 8 });
+    const ok = v => { const t = parseT(v); if (!isFinite(t)) return toast('格式不對'); closeSheet(); setSkip(id, t); toast(t ? `之後新開的集數從 ${fmtT(t)} 開始` : '已取消跳過片頭'); };
+    inp.onkeydown = e => { if (e.key === 'Enter') ok(inp.value); };
+    const e = nowEp(), here = e && String(e.showId) === String(id) && audio.currentTime > 1;
+    body.append(h('p', { class: 'hint', style: 'margin:0 0 10px' }, '這個節目新開的每一集都直接跳到這個時間（有續播點的集數照舊接著聽）。'), inp,
+      h('div', { class: 'row', style: 'margin:12px 0 0' },
+        h('button', { class: 'btn primary', onclick: () => ok(inp.value) }, '儲存'),
+        here ? h('button', { class: 'btn', onclick: () => ok(Math.floor(audio.currentTime)) }, `設為現在 ${fmtT(audio.currentTime)}`) : null,
+        skipOf(id) ? h('button', { class: 'btn danger', onclick: () => ok(0) }, '取消跳過') : null,
+        h('button', { class: 'btn', onclick: closeSheet }, '取消')));
+  });
 }
 function addExcl() {
   openSheet('排除標題含這些詞的單集', body => {
@@ -634,14 +667,17 @@ function loadEp(autoplay) {
   seekOnce = null;
   audio.removeEventListener('loadedmetadata', onMeta);   // 上一集還沒載完就換集時，舊的跳秒不可套到新的一集
   onMeta = () => {
-    if (nowEp() === e && p > 10 && (!isFinite(audio.duration) || p < audio.duration - 30)) audio.currentTime = p;
+    let t = p > 10 ? p : 0;
+    const sk = skipOf(e.showId);
+    if (t < sk) t = sk;                    // 跳過片頭：還沒聽過片頭之後的，一律從片頭結束處開始
+    if (nowEp() === e && t > 0 && (!isFinite(audio.duration) || t < audio.duration - 30)) audio.currentTime = t;
     audio.playbackRate = rate;
   };
   audio.addEventListener('loadedmetadata', onMeta, { once: true });
   if (autoplay) audio.play().catch(err => { if (err.name !== 'AbortError') toast('無法播放這一集'); });
   jset(LS_LAST, { queue, qi, listId: qList });
   if (autoplay && qList) { const l = getList(qList); if (l && l.items.some(x => key(x) === key(e))) { l.resume = { id: e.id, t: Math.floor(p) }; commit(); } }
-  setPlayIcons(); paintProgress(0); markNow(); mediaSession(e);
+  setPlayIcons(); paintProgress(0); markNow(); mediaSession(e); paintSkipBtn(); pipPaint(true);
 }
 function playQueue(q, i, restart, listId) {
   if (i < 0 || !q[i]) return;
@@ -697,8 +733,11 @@ $('#pRate').onclick = () => openSheet('播放速度', body => {
 $('#pOpen').onclick = openNP;
 $('#npClose').onclick = closeNP;
 $('#npAdd').onclick = () => { if (nowEp()) pickList(nowEp()); };
+$('#npSkip').prepend(icon('skipIntro'));
+$('#npSkip').onclick = () => { const e = nowEp(); if (e) editSkip(e.showId, e.show); };
+function paintSkipBtn() { const e = nowEp(), sk = e ? skipOf(e.showId) : 0; $('#npSkipT').textContent = sk ? fmtT(sk) : '片頭'; $('#npSkip').classList.toggle('primary', !!sk); }
 audio.onplay = audio.onpause = () => {
-  setPlayIcons(); document.body.classList.toggle('playing', !audio.paused);
+  setPlayIcons(); pipSync(); document.body.classList.toggle('playing', !audio.paused);
   if (audio.paused && !audio.ended) { savePos(); touchResume(true); }
   else if (!audio.paused) touchResume(false);   // 一開始播就把續播點指到這集（只寫本機，暫停時才上傳）
   if (curView === 'list') paintResume();
@@ -718,6 +757,7 @@ audio.ontimeupdate = () => {
   if (!seeking) { $('#seek').value = d ? audio.currentTime / d * 1000 : 0; paintProgress(); }
   $('#tCur').textContent = fmtT(audio.currentTime);
   $('#tRem').textContent = '-' + fmtT(Math.max(0, d - audio.currentTime));
+  pipTick();
   if (Date.now() - lastSave > 5000) { lastSave = Date.now(); savePos(); touchResume(false); }
 };
 $('#seek').oninput = () => { seeking = true; paintProgress($('#seek').value / 10); };
@@ -741,6 +781,125 @@ function mediaSession(e) {
   set('previoustrack', () => $('#pPrev').click());
   set('nexttrack', () => $('#pNext').click());
 }
+
+/* ---------- 子母畫面（PiP） ----------
+   音檔沒有畫面可縮，所以兩條路：
+   ① Document PiP（桌面 Chrome/Edge）：開一個小視窗放封面＋按鍵，可以直接操作。
+   ② 其他（iPhone Safari、Android Chrome）：把封面＋標題＋進度畫到 canvas，轉成靜音 video 再進子母畫面；
+      聲音仍由 <audio> 出，video 的播放／暫停跟 audio 互相連動。 */
+const docPiP = 'documentPictureInPicture' in window;
+const pipVideo = document.createElement('video');
+pipVideo.muted = true; pipVideo.playsInline = true; pipVideo.setAttribute('playsinline', '');
+const vidPiP = !!(document.pictureInPictureEnabled || pipVideo.webkitSupportsPresentationMode) && !!HTMLCanvasElement.prototype.captureStream;
+let pipWin = null, pipCanvas = null, pipImg = null, pipLast = 0;
+const pipOnVideo = () => document.pictureInPictureElement === pipVideo || pipVideo.webkitPresentationMode === 'picture-in-picture';
+const pipOn = () => !!pipWin || pipOnVideo();
+function pipBtn() { $('#npPip').setAttribute('aria-pressed', String(pipOn())); $('#npPip').classList.toggle('primary', pipOn()); }
+
+function pipDraw() {
+  const c = pipCanvas, e = nowEp();
+  if (!c || !e) return;
+  const g = c.getContext('2d'), W = c.width, H = c.height;
+  g.fillStyle = '#111'; g.fillRect(0, 0, W, H);
+  if (pipImg && pipImg.complete && pipImg.naturalWidth) g.drawImage(pipImg, 0, 0, H, H);
+  const x = H + 22, mw = W - x - 22;
+  const fit = (t, font, y) => {
+    g.font = font; let s = t;
+    while (s.length > 1 && g.measureText(s + '…').width > mw) s = s.slice(0, -1);
+    g.fillText(s === t ? t : s + '…', x, y);
+  };
+  g.fillStyle = '#fff'; fit(e.title, '600 30px system-ui, sans-serif', 70);
+  g.fillStyle = 'rgba(255,255,255,.65)'; fit(e.show, '24px system-ui, sans-serif', 110);
+  const d = dur(), pc = d ? Math.min(1, audio.currentTime / d) : 0;
+  g.fillStyle = 'rgba(255,255,255,.22)'; g.fillRect(x, H - 62, mw, 6);
+  g.fillStyle = '#fff'; g.fillRect(x, H - 62, mw * pc, 6);
+  g.fillStyle = 'rgba(255,255,255,.75)'; g.font = '22px system-ui, sans-serif';
+  g.fillText(`${fmtT(audio.currentTime)} / ${fmtT(d)}`, x, H - 24);
+  if (audio.paused) { g.textAlign = 'right'; g.fillText('已暫停', W - 22, H - 24); g.textAlign = 'left'; }
+}
+function pipPaint() {                    // 換集時更新封面與標題
+  if (!pipOn()) return;
+  const e = nowEp();
+  if (!e) return;
+  if (pipWin) {
+    const d = pipWin.document;
+    d.getElementById('art').src = bigArt(e.art); d.getElementById('t').textContent = e.title; d.getElementById('s').textContent = e.show;
+  }
+  if (pipCanvas) {
+    pipImg = new Image(); pipImg.crossOrigin = 'anonymous';   // mzstatic 回 CORS *，canvas 不會被污染
+    pipImg.onload = pipDraw; pipImg.src = bigArt(e.art);
+  }
+  pipLast = 0; pipSync(); pipTick();
+}
+function pipSync() {                     // audio 狀態 → PiP 畫面
+  if (pipWin) {
+    const b = pipWin.document.getElementById('pp');
+    if (b) b.replaceChildren(icon(audio.paused ? 'play' : 'pause'));
+  }
+  if (pipOnVideo()) {
+    if (audio.paused && !pipVideo.paused) pipVideo.pause();
+    else if (!audio.paused && pipVideo.paused) pipVideo.play().catch(() => {});
+    pipDraw();
+  }
+}
+function pipTick() {                     // 進度每秒重畫一次就夠
+  if (!pipOn() || Date.now() - pipLast < 1000) return;
+  pipLast = Date.now();
+  if (pipOnVideo()) pipDraw();
+  if (pipWin) pipWin.document.getElementById('bar').style.width = (dur() ? Math.min(100, audio.currentTime / dur() * 100) : 0) + '%';
+}
+// 使用者在子母畫面按播放／暫停：video 先變，再帶動 audio
+pipVideo.onplay = () => { if (pipOnVideo() && audio.paused) audio.play().catch(() => {}); };
+pipVideo.onpause = () => { if (pipOnVideo() && !audio.paused) audio.pause(); };
+for (const ev of ['enterpictureinpicture', 'leavepictureinpicture', 'webkitpresentationmodechanged']) pipVideo.addEventListener(ev, pipBtn);
+
+async function openDocPiP() {
+  pipWin = await documentPictureInPicture.requestWindow({ width: 360, height: 124 });
+  const d = pipWin.document;
+  const st = d.createElement('style');
+  st.textContent = `body{margin:0;display:flex;gap:10px;align-items:center;padding:10px;background:#111;color:#fff;font:14px system-ui,sans-serif;height:100vh;box-sizing:border-box;overflow:hidden}
+    img{width:calc(100vh - 20px);height:calc(100vh - 20px);border-radius:8px;object-fit:cover;flex:none}
+    .m{flex:1;min-width:0}.t,.s{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.t{font-weight:600}.s{opacity:.65;font-size:12px;margin-top:2px}
+    .track{height:3px;background:rgba(255,255,255,.2);border-radius:2px;margin:8px 0 4px}#bar{height:100%;width:0;background:#fff;border-radius:2px}
+    .c{display:flex;gap:2px}button{background:none;border:0;color:#fff;width:36px;height:36px;border-radius:50%;cursor:pointer;display:grid;place-items:center;padding:0}
+    button:hover{background:rgba(255,255,255,.12)}.ic{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+    .ic .f{fill:currentColor;stroke:none}.ic text{font:700 7px system-ui,sans-serif;fill:currentColor;stroke:none}`;
+  d.head.append(st);
+  const btn = (id, ic, f, label) => h('button', { id, 'aria-label': label, onclick: f }, ic ? icon(ic) : null);
+  // h() 用主頁的 document 建元素，append 進 PiP 視窗會自動 adopt
+  d.body.replaceChildren(h('img', { id: 'art', alt: '' }),
+    h('div', { class: 'm' }, h('div', { class: 't', id: 't' }), h('div', { class: 's', id: 's' }),
+      h('div', { class: 'track' }, h('div', { id: 'bar' })),
+      h('div', { class: 'c' }, btn('pv', 'prev', () => $('#pPrev').click(), '上一集'), btn('bk', 'back15', () => skip(-15), '倒退 15 秒'),
+        btn('pp', null, toggle, '播放／暫停'), btn('fw', 'fwd30', () => skip(30), '快轉 30 秒'), btn('nx', 'next', () => step(1), '下一集'))));
+  pipWin.addEventListener('pagehide', () => { pipWin = null; pipBtn(); });
+  pipPaint();
+}
+async function openVidPiP() {
+  if (!pipCanvas) {
+    pipCanvas = document.createElement('canvas'); pipCanvas.width = 640; pipCanvas.height = 240;
+    pipVideo.srcObject = pipCanvas.captureStream(4);
+  }
+  pipDraw();
+  await pipVideo.play().catch(() => {});
+  if (pipVideo.requestPictureInPicture) await pipVideo.requestPictureInPicture();
+  else pipVideo.webkitSetPresentationMode('picture-in-picture');
+  pipPaint();
+  if (audio.paused) pipVideo.pause();
+}
+async function togglePiP() {
+  if (!nowEp()) return;
+  try {
+    if (pipWin) { pipWin.close(); pipWin = null; }
+    else if (pipOnVideo()) { if (document.pictureInPictureElement) await document.exitPictureInPicture(); else pipVideo.webkitSetPresentationMode('inline'); }
+    else if (docPiP) await openDocPiP();
+    else await openVidPiP();
+  } catch (err) { toast('無法開啟子母畫面：' + (err.message || err.name)); }
+  pipBtn();
+}
+$('#npPip').prepend(icon('pip'));
+$('#npPip').hidden = !(docPiP || vidPiP);
+$('#npPip').onclick = togglePiP;
 
 /* ---------- 外觀主題 ---------- */
 const THEMES = { glass: null, pop: '#FFF1DC', vinyl: '#3A2C22' };   // 玻璃依淺色／深色另算
