@@ -68,7 +68,7 @@ function toast(msg) {
 }
 
 /* ---------- 資料 ---------- */
-const BUILD = '14';
+const BUILD = '15';
 const emptyData = () => ({ version: 1, updatedAt: 0, shows: [], lists: [], excludes: {}, skips: {} });   // excludes：{ 節目id: [排除詞] }；skips：{ 節目id: 片頭秒數 }
 const key = x => String(x && x.id);
 function uniq(arr) {                    // 依 id 去重，保留先出現的
@@ -875,17 +875,21 @@ async function openDocPiP() {
   pipWin.addEventListener('pagehide', () => { pipWin = null; pipBtn(); });
   pipPaint();
 }
-async function openVidPiP() {
-  if (!pipCanvas) {
-    pipCanvas = document.createElement('canvas'); pipCanvas.width = 640; pipCanvas.height = 240;
-    pipVideo.srcObject = pipCanvas.captureStream(4);
-  }
+function prepVidPiP() {                 // iOS 要求「點擊當下同步」呼叫 PiP，且 video 必須已經有畫面 → 先把 video 準備好
+  if (pipCanvas) return;
+  pipCanvas = document.createElement('canvas'); pipCanvas.width = 640; pipCanvas.height = 240;
+  pipVideo.srcObject = pipCanvas.captureStream(4);
+  pipVideo.style.cssText = 'position:fixed;left:0;bottom:0;width:2px;height:2px;opacity:0;pointer-events:none';
+  document.body.append(pipVideo);        // iOS 不在 DOM 裡的 video 進不了子母畫面
   pipDraw();
-  await pipVideo.play().catch(() => {});
-  if (pipVideo.requestPictureInPicture) await pipVideo.requestPictureInPicture();
-  else pipVideo.webkitSetPresentationMode('picture-in-picture');
-  pipPaint();
-  if (audio.paused) pipVideo.pause();
+  pipVideo.play().catch(() => {});       // 靜音 inline 播放不需要使用者手勢
+}
+function openVidPiP() {                  // 不可以有任何 await 在 PiP 呼叫之前，否則 iOS 判定「不是使用者觸發」
+  prepVidPiP(); pipDraw();
+  if (pipVideo.paused) pipVideo.play().catch(() => {});
+  const r = pipVideo.webkitSetPresentationMode && pipVideo.webkitSupportsPresentationMode('picture-in-picture')
+    ? pipVideo.webkitSetPresentationMode('picture-in-picture') : pipVideo.requestPictureInPicture();
+  return Promise.resolve(r).then(() => { pipPaint(); if (audio.paused) pipVideo.pause(); });
 }
 async function togglePiP() {
   if (!nowEp()) return;
@@ -894,12 +898,13 @@ async function togglePiP() {
     else if (pipOnVideo()) { if (document.pictureInPictureElement) await document.exitPictureInPicture(); else pipVideo.webkitSetPresentationMode('inline'); }
     else if (docPiP) await openDocPiP();
     else await openVidPiP();
-  } catch (err) { toast('無法開啟子母畫面：' + (err.message || err.name)); }
+  } catch (err) { toast(pipCanvas && pipVideo.readyState < 2 ? '子母畫面還在準備，請再按一次' : '無法開啟子母畫面：' + (err.message || err.name)); }
   pipBtn();
 }
 $('#npPip').prepend(icon('pip'));
 $('#npPip').hidden = !(docPiP || vidPiP);
 $('#npPip').onclick = togglePiP;
+if (!docPiP && vidPiP) audio.addEventListener('play', prepVidPiP, { once: true });   // 第一次播放時就先備好，按鈕才能一按即開
 
 /* ---------- 外觀主題 ---------- */
 const THEMES = { glass: null, pop: '#FFF1DC', vinyl: '#3A2C22' };   // 玻璃依淺色／深色另算
