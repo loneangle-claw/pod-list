@@ -67,7 +67,7 @@ function toast(msg) {
 }
 
 /* ---------- 資料 ---------- */
-const BUILD = '18';
+const BUILD = '19';
 const emptyData = () => ({ version: 1, updatedAt: 0, shows: [], lists: [], excludes: {} });   // excludes：{ 節目id: [排除詞] }
 const key = x => String(x && x.id);
 function uniq(arr) {                    // 依 id 去重，保留先出現的
@@ -76,7 +76,7 @@ function uniq(arr) {                    // 依 id 去重，保留先出現的
 }
 function sanitize(d) {                  // 任何進入 data 的來源（本機、匯入、GitHub）都過這一關
   d.shows = uniq(d.shows);
-  d.lists = (d.lists || []).filter(l => l && l.id).map(l => (l.items = uniq(l.items), Array.isArray(l.kw) || delete l.kw, l));
+  d.lists = (d.lists || []).filter(l => l && l.id).map(l => (l.items = uniq(l.items), Array.isArray(l.kw) || delete l.kw, Array.isArray(l.ex) || delete l.ex, l));
   if (!d.excludes || typeof d.excludes !== 'object' || Array.isArray(d.excludes)) d.excludes = {};
   delete d.skips;                       // v14–v16 的「跳過片頭」已移除，順手清掉舊資料
   return d;
@@ -385,27 +385,30 @@ function renderListItems() {
 }
 $('#listFilter').oninput = renderListItems;
 
-/* 找新集：查清單裡出現過的頻道，列出標題含關鍵字、但還不在清單裡的單集（關鍵字存在清單的 kw，跟著同步） */
+/* 找新集：查清單裡出現過的頻道，列出標題含關鍵字、但還不在清單裡的單集（關鍵字存清單的 kw、排除詞存 ex，跟著同步；節目頁的排除詞也照套） */
 const splitTerms = s => s.split(/[,，、;；]+/).map(x => x.trim()).filter(Boolean);
 $('#btnFindNew').onclick = () => openSheet('找這個清單頻道的新集', body => {
   const l = getList(curListId);
   const shows = [...new Map(l.items.filter(e => e.showId).map(e => [String(e.showId), { id: e.showId, name: e.show, art: e.art }])).values()];
   if (!shows.length) return body.append(h('div', { class: 'empty' }, '清單裡還沒有單集，不知道要查哪些頻道'));
   const inp = h('input', { type: 'text', value: (l.kw || []).join('、'), placeholder: '關鍵字（多個用逗號分開，空白＝全部）', maxlength: 120 });
+  const exInp = h('input', { type: 'text', value: (l.ex || []).join('、'), placeholder: '排除詞（標題含這些就不列）', maxlength: 120 });
   const out = h('div', { class: 'list' });
   const go = async () => {
-    l.kw = splitTerms(inp.value); commit();
-    const kws = l.kw.map(x => x.toLowerCase());
+    l.kw = splitTerms(inp.value); l.ex = splitTerms(exInp.value); commit();
+    const kws = l.kw.map(x => x.toLowerCase()), lex = l.ex.map(x => x.toLowerCase());
+    let hid = 0;
     out.replaceChildren(h('div', { class: 'empty' }, `查詢 ${shows.length} 個頻道中…`));
     const have = new Set(l.items.map(key)), found = [], fail = [];
     await Promise.all(shows.map(async s => {
       try {
         const rs = await itunes('lookup', { id: s.id, entity: 'podcastEpisode', limit: 200, country: $('#country').value });
-        const ex = exclOf(s.id).map(x => x.toLowerCase());
+        const ex = lex.concat(exclOf(s.id).map(x => x.toLowerCase()));
         for (const r of rs) {
           if (r.wrapperType !== 'podcastEpisode') continue;
           const e = epOf(r, s), t = e.title.toLowerCase();
-          if (e.url && !have.has(key(e)) && (!kws.length || kws.some(k => t.includes(k))) && !ex.some(x => t.includes(x))) found.push(e);
+          if (!e.url || have.has(key(e)) || (kws.length && !kws.some(k => t.includes(k)))) continue;
+          if (ex.some(x => t.includes(x))) hid++; else found.push(e);
         }
       } catch { fail.push(s.name); }
     }));
@@ -420,12 +423,16 @@ $('#btnFindNew').onclick = () => openSheet('找這個清單頻道的新集', bod
     const all = h('button', { class: 'btn primary', onclick: () => { addTo(l, eps); closeSheet(); renderListItems(); } }, icon('plus'), `全部加入 ${eps.length}`);
     out.replaceChildren(
       ...(fail.length ? [h('div', { class: 'empty' }, '查詢失敗：' + fail.join('、'))] : []),
+      ...(hid ? [h('div', { class: 'excl-n', style: 'margin:0 0 8px' }, `排除詞已擋掉 ${hid} 集`)] : []),
       ...(eps.length ? [h('div', { class: 'row', style: 'margin:0 0 8px' }, all), ...eps.map(rowOf)] : [h('div', { class: 'empty' }, '沒有符合的新集')]));
   };
-  inp.onkeydown = e => { if (e.key === 'Enter') go(); };
+  inp.onkeydown = exInp.onkeydown = e => { if (e.key === 'Enter') go(); };
+  const showEx = [...new Set(shows.flatMap(s => exclOf(s.id)))];
   body.append(h('div', { class: 's', style: 'margin:-6px 0 10px;font-size:12.5px;opacity:.7' }, '頻道：' + shows.map(s => s.name).join('、')),
-    h('div', { class: 'row', style: 'margin:0 0 12px' }, inp, h('button', { class: 'btn primary', onclick: go }, '查詢')), out);
-  if (l.kw && l.kw.length) go();
+    h('div', { class: 'row', style: 'margin:0 0 8px' }, inp, h('button', { class: 'btn primary', onclick: go }, '查詢')),
+    h('div', { class: 'row', style: 'margin:0 0 8px' }, exInp),
+    ...(showEx.length ? [h('div', { class: 's', style: 'margin:0 0 12px;font-size:12.5px;opacity:.7' }, '另套用節目頁排除詞：' + showEx.join('、'))] : [h('div', { style: 'height:4px' })]), out);
+  if ((l.kw && l.kw.length) || (l.ex && l.ex.length)) go();
 });
 /* 每個清單各記一個「上次聽到哪」：{ id: 單集id, t: 秒 }，存在清單資料裡跟著 GitHub 同步 */
 function resumeOf(l) {
