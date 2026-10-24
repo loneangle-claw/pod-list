@@ -17,7 +17,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&display=swap">
-<link rel="stylesheet" href="style.css?v=17">
+<link rel="stylesheet" href="style.css?v=18">
 </head>
 <body>
 <div id="ambient" aria-hidden="true"></div>
@@ -75,9 +75,13 @@
       <button id="btnResume" class="btn primary" hidden></button>
       <button id="btnPlayAll" class="btn primary" data-ic="play">全部播放</button>
       <button id="btnSortList" class="btn" data-ic="sort">依時間排序</button>
+      <button id="btnFindNew" class="btn" data-ic="search">找新集</button>
       <button id="btnRename" class="btn">改名</button>
       <button id="btnClearList" class="btn">清空</button>
       <button id="btnDelList" class="btn danger">刪除清單</button>
+    </div>
+    <div class="row">
+      <input id="listFilter" type="search" placeholder="在清單內查標題或節目…" autocomplete="off">
     </div>
     <div id="listItems" class="list numbered"></div>
   </section>
@@ -163,6 +167,6 @@
 <dialog id="sheet"><div id="sheetBody"></div></dialog>
 <div id="toast" hidden></div>
 <audio id="audio" preload="metadata"></audio>
-<script src="app.js?v=17"></script>
+<script src="app.js?v=18"></script>
 </body>
 </html>
