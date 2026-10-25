@@ -17,7 +17,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&display=swap">
-<link rel="stylesheet" href="style.css?v=19">
+<link rel="stylesheet" href="style.css?v=20">
 </head>
 <body>
 <div id="ambient" aria-hidden="true"></div>
@@ -30,6 +30,7 @@
 </header>
 
 <main id="main">
+  <button id="whatsNew" class="btn whats-new" hidden></button>
   <section id="view-search" class="view">
     <form id="searchForm" class="row">
       <input id="q" type="search" placeholder="搜尋 Apple Podcast 節目…" autocomplete="off" enterkeyhint="search">
@@ -116,6 +117,9 @@
     </div>
     <p id="ghMsg" class="hint"></p>
 
+    <h2 class="sec">改版內容</h2>
+    <div class="row wrap"><button id="btnChanges" class="btn">最近三版改版與教學</button></div>
+
     <h2 class="sec">備份</h2>
     <div class="row wrap">
       <button id="btnExport" class="btn">匯出 JSON</button>
@@ -167,6 +171,6 @@
 <dialog id="sheet"><div id="sheetBody"></div></dialog>
 <div id="toast" hidden></div>
 <audio id="audio" preload="metadata"></audio>
-<script src="app.js?v=19"></script>
+<script src="app.js?v=20"></script>
 </body>
 </html>

@@ -447,3 +447,11 @@ button:focus:not(:focus-visible){outline:none}
 .numbered .item .acts .icon-btn{min-width:30px;font-size:15px}
 #main{scrollbar-width:none}
 #main::-webkit-scrollbar{display:none}
+/* 改版提示列與說明 sheet */
+.whats-new{width:100%;justify-content:space-between;margin-bottom:14px;white-space:normal;text-align:left}
+.whats-new small{font-weight:400;opacity:.75;flex:none}
+.cl h4{margin:14px 0 6px;font-size:14px}
+.cl ul{margin:0;padding-left:18px}
+.cl li{margin:6px 0;font-size:13.5px;line-height:1.5}
+.cl li small{display:block;color:var(--muted-fg);font-size:12.5px}
+label.cl-chk{display:flex;align-items:center;gap:8px;margin:16px 0 12px;font-size:14px;color:inherit}

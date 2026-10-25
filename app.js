@@ -67,7 +67,7 @@ function toast(msg) {
 }
 
 /* ---------- 資料 ---------- */
-const BUILD = '19';
+const BUILD = '20';
 const emptyData = () => ({ version: 1, updatedAt: 0, shows: [], lists: [], excludes: {} });   // excludes：{ 節目id: [排除詞] }
 const key = x => String(x && x.id);
 function uniq(arr) {                    // 依 id 去重，保留先出現的
@@ -286,6 +286,7 @@ document.querySelectorAll('#sortSeg button').forEach(b => b.onclick = () => {
   sortDir = d;
   localStorage.setItem('podlist.sort', sortDir > 0 ? 'asc' : 'desc');
   paintSort(); renderEpisodes();
+  resortQueue(sortDir, () => !qList && queue.every(e => String(e.showId) === String(curShow.id)));   // 正在播這個節目：下一集跟著新順序走
 });
 paintSort();
 function visibleEpisodes() {            // 篩選＋排序後的單集，也是「全部加入」與播放佇列的範圍
@@ -489,6 +490,7 @@ $('#btnSortList').onclick = () => openSheet('依發布時間重新排序', body 
   const apply = dir => () => {
     getList(curListId).items.sort(byDate(dir));
     commit(); closeSheet(); renderListItems();
+    resortQueue(dir, () => qList === curListId);
     toast(dir < 0 ? '已排成 新→舊' : '已排成 舊→新');
   };
   body.append(h('button', { class: 'opt', onclick: apply(-1) }, '新 → 舊', h('small', {}, '最新的在最上面')),
@@ -707,6 +709,12 @@ function playQueue(q, i, restart, listId) {
   if (same) { audio.paused ? audio.play() : audio.pause(); jset(LS_LAST, { queue, qi, listId: qList }); return; }
   loadEp(true);
 }
+function resortQueue(dir, ok) {            // 播放中切換新→舊／舊→新：佇列照新順序重排，目前這集不動
+  const now = nowEp();
+  if (!now || !ok()) return;
+  queue.sort(byDate(dir)); qi = queue.indexOf(now);
+  renderSlots(); jset(LS_LAST, { queue, qi, listId: qList });
+}
 function step(d) {
   const j = qi + d;
   if (j < 0 || j >= queue.length) return false;
@@ -902,6 +910,41 @@ for (const t of ['gesturestart', 'gesturechange', 'gestureend'])
 /* 版本與更新：GitHub Pages 的 max-age=600 會讓 HTML 與 JS 版本錯開，
    所以 index.html 以 ?v= 綁版本，並在偵測到新的 service worker 接手時自動重載一次。 */
 $('#ver').textContent = BUILD;
+
+/* 改版提示：版本跟上次勾「不再提示」時不同就在頂端出現提示列；設定頁可隨時再看 */
+const LS_SEEN = 'podlist.seenVer';
+const CHANGES = [
+  { v: '20', date: '2026-10-25', title: '播放順序修正、改版提示', items: [
+    ['播放中切換「新 → 舊／舊 → 新」，下一集會跟著新順序', '例如先用新 → 舊開始聽，發現是上下集故事，切到舊 → 新後，按下一集就會播較新的那集。清單頁的「依時間排序」也一樣。'],
+    ['改版提示與教學', '有新版本時頂端會出現提示，點進來看最近三版的改動；勾選下方「不再提示」，下次改版前就不會再出現。設定頁最下方也能隨時再看。']] },
+  { v: '19', date: '2026-10-24', title: '找新集加入排除詞', items: [
+    ['找新集多一欄排除詞', '標題含這些詞的集數不列出（多個用逗號分開），會記在這個清單上，下次打開自動帶入。'],
+    ['節目頁的排除詞也會一起套用', '結果上方會顯示「排除詞已擋掉 N 集」。']] },
+  { v: '18', date: '2026-10-24', title: '找新集、清單內查詢', items: [
+    ['清單頁「找新集」', '查這個清單裡出現過的頻道，列出標題含關鍵字、但還沒加進清單的集數，可一集一集加或「全部加入」。關鍵字留白＝列出所有沒加的集數。'],
+    ['清單頁篩選框', '用標題或節目名查清單內的集數；篩選後按播放，只播篩出來的那幾集。']] }
+];
+const seenNow = () => localStorage.getItem(LS_SEEN) === BUILD;
+function paintWhatsNew() {
+  const b = $('#whatsNew');
+  b.hidden = seenNow();
+  b.replaceChildren(h('span', {}, `有新改版 v${BUILD}：${CHANGES[0].title}`), h('small', {}, '看說明 ›'));
+}
+function openChanges() {
+  openSheet('最近三版改了什麼', body => {
+    for (const c of CHANGES)
+      body.append(h('div', { class: 'cl' }, h('h4', {}, `v${c.v} · ${c.date} · ${c.title}`),
+        h('ul', {}, ...c.items.map(([t, how]) => h('li', {}, h('b', {}, t), h('small', {}, how))))));
+    const chk = h('input', { type: 'checkbox' });
+    chk.checked = seenNow();
+    chk.onchange = () => { if (chk.checked) localStorage.setItem(LS_SEEN, BUILD); else localStorage.removeItem(LS_SEEN); paintWhatsNew(); };
+    body.append(h('label', { class: 'cl-chk' }, chk, '我知道了，下次改版前不再提示'),
+      h('button', { class: 'btn primary', style: 'width:100%', onclick: closeSheet }, '關閉'));
+  });
+}
+$('#whatsNew').onclick = openChanges;
+$('#btnChanges').onclick = openChanges;
+paintWhatsNew();
 $('#btnReload').onclick = async () => {
   try {
     if ('serviceWorker' in navigator) for (const r of await navigator.serviceWorker.getRegistrations()) await r.unregister();
