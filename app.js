@@ -68,7 +68,7 @@ function toast(msg) {
 }
 
 /* ---------- 資料 ---------- */
-const BUILD = '22';
+const BUILD = '23';
 const emptyData = () => ({ version: 1, updatedAt: 0, shows: [], lists: [], excludes: {} });   // excludes：{ 節目id: [排除詞] }
 const key = x => String(x && x.id);
 function uniq(arr) {                    // 依 id 去重，保留先出現的
@@ -270,10 +270,19 @@ async function openShow(s) {
 }
 /* 更舊單集：iTunes 只給最新 200 集，其餘讀 RSS。已在清單裡的舊集沿用原本的 id，才不會重複、✓ 也對得上 */
 let curGuids = new Set(), canOlder = false;
-function olderFromRss(xml, s) {
+async function olderEpisodes(s, latest, guids) {   // latest／guids：iTunes 已給的最新 200 集，RSS 裡同一集要跳過
+  const info = (await itunes('lookup', { id: s.id, country: $('#country').value }))[0];
+  if (!info || !info.feedUrl) throw new Error('這個節目沒有提供 RSS');
+  const r = await fetch(`${FEED_PROXY}?url=${encodeURIComponent(info.feedUrl)}`);
+  if (!r.ok) throw new Error(`${r.status} ${await r.text()}`);
+  const xml = new DOMParser().parseFromString(await r.text(), 'text/xml');
+  if (xml.querySelector('parsererror')) throw new Error('RSS 格式無法解析');
+  return olderFromRss(xml, s, latest, guids);
+}
+function olderFromRss(xml, s, latest, guids) {
   const epKeys = e => [e.url.replace(/^https?:/i, '').split('?')[0], `${e.title.trim()}|${fmtD(e.date)}`];
-  const seen = new Set(curGuids);
-  curEpisodes.forEach(e => epKeys(e).forEach(k => seen.add(k)));
+  const seen = new Set(guids);
+  latest.forEach(e => epKeys(e).forEach(k => seen.add(k)));
   const known = new Map();
   data.lists.forEach(l => l.items.forEach(x => { if (String(x.showId) === String(s.id)) epKeys(x).forEach(k => known.set(k, x)); }));
   const out = [];
@@ -298,14 +307,8 @@ $('#btnOlder').onclick = async () => {
   const s = curShow, b = $('#btnOlder');
   b.disabled = true; b.textContent = '載入中…';
   try {
-    const info = (await itunes('lookup', { id: s.id, country: $('#country').value }))[0];
-    if (!info || !info.feedUrl) throw new Error('這個節目沒有提供 RSS');
-    const r = await fetch(`${FEED_PROXY}?url=${encodeURIComponent(info.feedUrl)}`);
-    if (!r.ok) throw new Error(`${r.status} ${await r.text()}`);
-    const xml = new DOMParser().parseFromString(await r.text(), 'text/xml');
-    if (xml.querySelector('parsererror')) throw new Error('RSS 格式無法解析');
+    const older = await olderEpisodes(s, curEpisodes, curGuids);
     if (curShow !== s) return;
-    const older = olderFromRss(xml, s);
     curEpisodes = curEpisodes.concat(older); canOlder = false;
     renderEpisodes();
     toast(older.length ? `多載入 ${older.length} 集` : '沒有更舊的單集了');
@@ -435,33 +438,41 @@ function renderListItems() {
 }
 $('#listFilter').oninput = renderListItems;
 
-/* 找新集：查清單裡出現過的頻道，列出標題含關鍵字、但還不在清單裡的單集（關鍵字存清單的 kw、排除詞存 ex，跟著同步；節目頁的排除詞也照套） */
+/* 找新集：打開就查清單裡出現過的頻道，列出還不在清單裡的單集（新集＋舊集，超過 200 集的頻道連 RSS 一起查）。
+   有關鍵字就只列標題含關鍵字的（關鍵字存清單的 kw、排除詞存 ex，跟著同步；節目頁的排除詞也照套） */
 const splitTerms = s => s.split(/[,，、;；]+/).map(x => x.trim()).filter(Boolean);
-$('#btnFindNew').onclick = () => openSheet('找這個清單頻道的新集', body => {
+$('#btnFindNew').onclick = () => openSheet('這個清單頻道還沒加入的單集', body => {
   const l = getList(curListId);
   const shows = [...new Map(l.items.filter(e => e.showId).map(e => [String(e.showId), { id: e.showId, name: e.show, art: e.art }])).values()];
   if (!shows.length) return body.append(h('div', { class: 'empty' }, '清單裡還沒有單集，不知道要查哪些頻道'));
   const inp = h('input', { type: 'text', value: (l.kw || []).join('、'), placeholder: '關鍵字（多個用逗號分開，空白＝全部）', maxlength: 120 });
   const exInp = h('input', { type: 'text', value: (l.ex || []).join('、'), placeholder: '排除詞（標題含這些就不列）', maxlength: 120 });
   const out = h('div', { class: 'list' });
+  let run = 0;
   const go = async () => {
+    const me = ++run;
     l.kw = splitTerms(inp.value); l.ex = splitTerms(exInp.value); commit();
     const kws = l.kw.map(x => x.toLowerCase()), lex = l.ex.map(x => x.toLowerCase());
     let hid = 0;
     out.replaceChildren(h('div', { class: 'empty' }, `查詢 ${shows.length} 個頻道中…`));
-    const have = new Set(l.items.map(key)), found = [], fail = [];
+    const have = new Set(l.items.map(key)), found = [], fail = [], oldFail = [];
     await Promise.all(shows.map(async s => {
       try {
-        const rs = await itunes('lookup', { id: s.id, entity: 'podcastEpisode', limit: 200, country: $('#country').value });
+        const rs = (await itunes('lookup', { id: s.id, entity: 'podcastEpisode', limit: 200, country: $('#country').value })).filter(r => r.wrapperType === 'podcastEpisode');
+        const latest = rs.map(r => epOf(r, s)).filter(e => e.url);
+        let older = [];
+        if (rs.length >= 200) {
+          try { older = await olderEpisodes(s, latest, rs.map(r => r.episodeGuid).filter(Boolean)); } catch { oldFail.push(s.name); }
+        }
         const ex = lex.concat(exclOf(s.id).map(x => x.toLowerCase()));
-        for (const r of rs) {
-          if (r.wrapperType !== 'podcastEpisode') continue;
-          const e = epOf(r, s), t = e.title.toLowerCase();
-          if (!e.url || have.has(key(e)) || (kws.length && !kws.some(k => t.includes(k)))) continue;
+        for (const e of latest.concat(older)) {
+          const t = e.title.toLowerCase();
+          if (have.has(key(e)) || (kws.length && !kws.some(k => t.includes(k)))) continue;
           if (ex.some(x => t.includes(x))) hid++; else found.push(e);
         }
       } catch { fail.push(s.name); }
     }));
+    if (me !== run) return;              // 查詢中又按了一次，只顯示最後那次
     const eps = uniq(found).sort(byDate(-1));
     const rowOf = e => {
       const b = h('button', { class: 'icon-btn add', 'aria-label': '加入清單', onclick: () => { addTo(l, e); b.classList.add('in'); b.replaceChildren(icon('check')); renderListItems(); } }, icon('plus'));
@@ -473,8 +484,9 @@ $('#btnFindNew').onclick = () => openSheet('找這個清單頻道的新集', bod
     const all = h('button', { class: 'btn primary', onclick: () => { addTo(l, eps); closeSheet(); renderListItems(); } }, icon('plus'), `全部加入 ${eps.length}`);
     out.replaceChildren(
       ...(fail.length ? [h('div', { class: 'empty' }, '查詢失敗：' + fail.join('、'))] : []),
+      ...(oldFail.length ? [h('div', { class: 'empty' }, '舊集查詢失敗，只列最新 200 集：' + oldFail.join('、'))] : []),
       ...(hid ? [h('div', { class: 'excl-n', style: 'margin:0 0 8px' }, `排除詞已擋掉 ${hid} 集`)] : []),
-      ...(eps.length ? [h('div', { class: 'row', style: 'margin:0 0 8px' }, all), ...eps.map(rowOf)] : [h('div', { class: 'empty' }, '沒有符合的新集')]));
+      ...(eps.length ? [h('div', { class: 'row', style: 'margin:0 0 8px' }, all), ...eps.map(rowOf)] : [h('div', { class: 'empty' }, '沒有未加入的單集')]));
   };
   inp.onkeydown = exInp.onkeydown = e => { if (e.key === 'Enter') go(); };
   const showEx = [...new Set(shows.flatMap(s => exclOf(s.id)))];
@@ -482,7 +494,7 @@ $('#btnFindNew').onclick = () => openSheet('找這個清單頻道的新集', bod
     h('div', { class: 'row', style: 'margin:0 0 8px' }, inp, h('button', { class: 'btn primary', onclick: go }, '查詢')),
     h('div', { class: 'row', style: 'margin:0 0 8px' }, exInp),
     ...(showEx.length ? [h('div', { class: 's', style: 'margin:0 0 12px;font-size:12.5px;opacity:.7' }, '另套用節目頁排除詞：' + showEx.join('、'))] : [h('div', { style: 'height:4px' })]), out);
-  if ((l.kw && l.kw.length) || (l.ex && l.ex.length)) go();
+  go();
 });
 /* 每個清單各記一個「上次聽到哪」：{ id: 單集id, t: 秒 }，存在清單資料裡跟著 GitHub 同步 */
 function resumeOf(l) {
@@ -963,15 +975,15 @@ $('#ver').textContent = BUILD;
 /* 改版提示：版本跟上次勾「不再提示」時不同就在頂端出現提示列；設定頁可隨時再看 */
 const LS_SEEN = 'podlist.seenVer';
 const CHANGES = [
+  { v: '23', date: '2026-11-02', title: '清單直接列出全部沒加的集數', items: [
+    ['按「找新集」就自動查', '不用打關鍵字，打開就列出這個清單的頻道裡還沒加入的集數，新的排最前面，可以一集一集加或「全部加入」。'],
+    ['超過 200 集的頻道也查得到舊集', '會連 200 集以前的集數一起列出來。有填關鍵字或排除詞時，一樣照著篩。']] },
   { v: '22', date: '2026-11-02', title: '新功能帶你操作一遍', items: [
     ['改版後自動跳出互動教學', '金框和手指會指出下一步，你自己打字、自己點；隨時可以按「跳過」。'],
     ['可以再看一次', '設定頁「改版內容」的「互動教學」。']] },
   { v: '21', date: '2026-11-02', title: '可載入 200 集以外的舊單集', items: [
     ['節目頁「載入更舊單集」', '節目超過 200 集時會出現這個按鈕，按下去會把更舊的集數一起列出來，一樣可以篩選、排序、加入清單。'],
     ['已在清單裡的集數不會重複', '舊集如果之前就加過，會直接顯示 ✓。']] },
-  { v: '20', date: '2026-10-25', title: '播放順序修正、改版提示', items: [
-    ['播放中切換「新 → 舊／舊 → 新」，下一集會跟著新順序', '例如先用新 → 舊開始聽，發現是上下集故事，切到舊 → 新後，按下一集就會播較新的那集。清單頁的「依時間排序」也一樣。'],
-    ['改版提示與教學', '有新版本時頂端會出現提示，點進來看最近三版的改動；勾選下方「不再提示」，下次改版前就不會再出現。設定頁最下方也能隨時再看。']] },
 ];
 const seenNow = () => localStorage.getItem(LS_SEEN) === BUILD;
 function paintWhatsNew() {
@@ -998,25 +1010,16 @@ paintWhatsNew();
 /* 互動教學：改版後自動跳出，在真實頁面上用金框＋手指一步步帶，使用者自己打字、自己點。
    不鎖畫面、可隨時跳過；要換內容改 TOUR_VER 與 TOUR_STEPS（TOUR_VER 變了才會再跳一次）。 */
 const LS_TOUR = 'podlist.tourVer';
-const TOUR_VER = '22';
-const TOUR_TITLE = '載入更舊單集';
+const TOUR_VER = '23';
+const TOUR_TITLE = '找未加入的單集';
 const shown = el => !!el && el.getClientRects().length > 0;
-let tourOlderSeen = false;
 const TOUR_STEPS = [
-  { target: '#searchForm', text: '自己輸入想聽的節目，再按搜尋。沒想法可以打「從前從前」。',
-    done: () => !!$('#results .item') || !$('#view-show').hidden },
-  { target: '#results .item', text: '點想聽的節目（不一定要點第一個）。',
-    done: () => !$('#view-show').hidden },
-  { target: () => canOlder ? '#btnOlder' : null,
-    text: () => {
-      if (canOlder) return '這個節目超過 200 集。按「載入更舊單集」，把更舊的集數也列出來。';
-      return curEpisodes.length ? '這個節目不到 200 集，不用載入。按左上角返回，換「從前從前」試試。' : '正在載入單集…';
-    },
-    enter: () => { tourOlderSeen = false; },
-    tick: () => { if (canOlder) tourOlderSeen = true; },
-    back: () => $('#view-show').hidden ? 1 : null,
-    done: () => tourOlderSeen && !canOlder },
-  { target: '#btnAddAll', soft: true, text: '完成！看這裡的「全部」，集數變多了。舊集一樣可以篩選、排序、加入清單。', finish: true }
+  { target: '#tabs [data-tab=lists]', text: '到「清單」頁。',
+    done: () => !$('#view-lists').hidden || !$('#view-list').hidden },
+  { target: '#lists .item',
+    text: () => data.lists.length ? '點一個已經建立的清單。' : '你還沒有清單。先按「跳過」，建好清單、加幾集之後再用這個功能。',
+    done: () => !$('#view-list').hidden },
+  { target: '#btnFindNew', soft: true, text: '完成！之後按「找新集」，就會自動列出這個清單的頻道裡還沒加入的集數，包含最新的和 200 集以前的舊集。', finish: true }
 ];
 
 const tour = { i: -1, el: null, timer: 0, raf: 0, root: null };
