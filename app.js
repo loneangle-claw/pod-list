@@ -6,6 +6,7 @@
 const $ = s => document.querySelector(s);
 const LS_DATA = 'podlist.data', LS_GH = 'podlist.gh', LS_POS = 'podlist.pos', LS_LAST = 'podlist.last', LS_RATE = 'podlist.rate';
 const ITUNES = 'https://itunes.apple.com';
+const FEED_PROXY = 'https://pod-list-feed.fbiericlin.workers.dev/';   // worker\feed.js：讀 iTunes 200 集以外的舊單集（RSS 多數沒開 CORS）
 
 function h(tag, attrs, ...kids) {
   const el = document.createElement(tag);
@@ -67,7 +68,7 @@ function toast(msg) {
 }
 
 /* ---------- 資料 ---------- */
-const BUILD = '20';
+const BUILD = '21';
 const emptyData = () => ({ version: 1, updatedAt: 0, shows: [], lists: [], excludes: {} });   // excludes：{ 節目id: [排除詞] }
 const key = x => String(x && x.id);
 function uniq(arr) {                    // 依 id 去重，保留先出現的
@@ -253,17 +254,64 @@ function renderMyShows() {
     h('button', { class: 'chip', onclick: () => openShow(s) }, h('img', { src: s.art, loading: 'lazy', alt: '' }), h('span', {}, s.name))));
 }
 async function openShow(s) {
-  curShow = s; curEpisodes = [];
+  curShow = s; curEpisodes = []; curGuids = new Set(); canOlder = false;
   $('#epFilter').value = '';
   nav('show', s.name); renderShowHead();
   $('#episodes').replaceChildren(h('div', { class: 'empty' }, '載入單集中…'));
   try {
     const rs = await itunes('lookup', { id: s.id, entity: 'podcastEpisode', limit: 200, country: $('#country').value });
     if (curShow !== s) return;
-    curEpisodes = rs.filter(r => r.wrapperType === 'podcastEpisode').map(r => epOf(r, s)).filter(e => e.url);
+    const eps = rs.filter(r => r.wrapperType === 'podcastEpisode');
+    curEpisodes = eps.map(r => epOf(r, s)).filter(e => e.url);
+    curGuids = new Set(eps.map(r => r.episodeGuid).filter(Boolean));
+    canOlder = eps.length >= 200;       // iTunes 上限 200 集，滿了才可能還有更舊的
     renderEpisodes(); rise([...$('#episodes').children], 30);
   } catch (err) { $('#episodes').replaceChildren(h('div', { class: 'empty' }, '載入失敗：' + err.message)); }
 }
+/* 更舊單集：iTunes 只給最新 200 集，其餘讀 RSS。已在清單裡的舊集沿用原本的 id，才不會重複、✓ 也對得上 */
+let curGuids = new Set(), canOlder = false;
+function olderFromRss(xml, s) {
+  const epKeys = e => [e.url.replace(/^https?:/i, '').split('?')[0], `${e.title.trim()}|${fmtD(e.date)}`];
+  const seen = new Set(curGuids);
+  curEpisodes.forEach(e => epKeys(e).forEach(k => seen.add(k)));
+  const known = new Map();
+  data.lists.forEach(l => l.items.forEach(x => { if (String(x.showId) === String(s.id)) epKeys(x).forEach(k => known.set(k, x)); }));
+  const out = [];
+  for (const it of xml.querySelectorAll('item')) {
+    const child = n => [...it.children].find(c => c.nodeName === n);   // 用完整標籤名，title 才不會撈到 itunes:title
+    const text = n => (child(n)?.textContent || '').trim();
+    const url = child('enclosure')?.getAttribute('url') || '';
+    if (!/^https?:/i.test(url)) continue;
+    const guid = text('guid'), when = Date.parse(text('pubDate'));
+    const secs = text('itunes:duration').split(':').reduce((a, x) => a * 60 + Number(x), 0);
+    const e = { id: '', title: text('title') || '(無標題)', show: s.name, showId: s.id, url: url.replace(/^http:/i, 'https:'), art: s.art,
+      ms: secs > 0 ? secs * 1000 : 0, date: when ? new Date(when).toISOString() : '' };
+    const keys = epKeys(e);
+    if ((guid && seen.has(guid)) || keys.some(k => seen.has(k))) continue;
+    const old = keys.map(k => known.get(k)).find(Boolean);
+    e.id = old ? old.id : `rss:${s.id}:${guid || keys[0]}`;
+    out.push(e);
+  }
+  return uniq(out);
+}
+$('#btnOlder').onclick = async () => {
+  const s = curShow, b = $('#btnOlder');
+  b.disabled = true; b.textContent = '載入中…';
+  try {
+    const info = (await itunes('lookup', { id: s.id, country: $('#country').value }))[0];
+    if (!info || !info.feedUrl) throw new Error('這個節目沒有提供 RSS');
+    const r = await fetch(`${FEED_PROXY}?url=${encodeURIComponent(info.feedUrl)}`);
+    if (!r.ok) throw new Error(`${r.status} ${await r.text()}`);
+    const xml = new DOMParser().parseFromString(await r.text(), 'text/xml');
+    if (xml.querySelector('parsererror')) throw new Error('RSS 格式無法解析');
+    if (curShow !== s) return;
+    const older = olderFromRss(xml, s);
+    curEpisodes = curEpisodes.concat(older); canOlder = false;
+    renderEpisodes();
+    toast(older.length ? `多載入 ${older.length} 集` : '沒有更舊的單集了');
+  } catch (err) { toast('載入失敗：' + err.message); }
+  finally { b.disabled = false; b.textContent = '載入更舊單集'; }
+};
 function renderShowHead() {
   const s = curShow, fav = data.shows.some(x => x.id === s.id);
   const toggle = () => {
@@ -328,6 +376,7 @@ function addExcl() {
 function renderEpisodes() {
   const eps = visibleEpisodes();
   renderExcl();
+  $('#btnOlder').hidden = !canOlder;
   const msg = curEpisodes.length ? '沒有符合的單集' : '這個節目沒有可播放的單集';
   const b = $('#btnAddAll');
   b.replaceChildren(icon('plus'), `全部${eps.length ? ' ' + eps.length : ''}`);
@@ -914,15 +963,15 @@ $('#ver').textContent = BUILD;
 /* 改版提示：版本跟上次勾「不再提示」時不同就在頂端出現提示列；設定頁可隨時再看 */
 const LS_SEEN = 'podlist.seenVer';
 const CHANGES = [
+  { v: '21', date: '2026-11-02', title: '可載入 200 集以外的舊單集', items: [
+    ['節目頁「載入更舊單集」', '節目超過 200 集時會出現這個按鈕，按下去會把更舊的集數一起列出來，一樣可以篩選、排序、加入清單。'],
+    ['已在清單裡的集數不會重複', '舊集如果之前就加過，會直接顯示 ✓。']] },
   { v: '20', date: '2026-10-25', title: '播放順序修正、改版提示', items: [
     ['播放中切換「新 → 舊／舊 → 新」，下一集會跟著新順序', '例如先用新 → 舊開始聽，發現是上下集故事，切到舊 → 新後，按下一集就會播較新的那集。清單頁的「依時間排序」也一樣。'],
     ['改版提示與教學', '有新版本時頂端會出現提示，點進來看最近三版的改動；勾選下方「不再提示」，下次改版前就不會再出現。設定頁最下方也能隨時再看。']] },
   { v: '19', date: '2026-10-24', title: '找新集加入排除詞', items: [
     ['找新集多一欄排除詞', '標題含這些詞的集數不列出（多個用逗號分開），會記在這個清單上，下次打開自動帶入。'],
-    ['節目頁的排除詞也會一起套用', '結果上方會顯示「排除詞已擋掉 N 集」。']] },
-  { v: '18', date: '2026-10-24', title: '找新集、清單內查詢', items: [
-    ['清單頁「找新集」', '查這個清單裡出現過的頻道，列出標題含關鍵字、但還沒加進清單的集數，可一集一集加或「全部加入」。關鍵字留白＝列出所有沒加的集數。'],
-    ['清單頁篩選框', '用標題或節目名查清單內的集數；篩選後按播放，只播篩出來的那幾集。']] }
+    ['節目頁的排除詞也會一起套用', '結果上方會顯示「排除詞已擋掉 N 集」。']] }
 ];
 const seenNow = () => localStorage.getItem(LS_SEEN) === BUILD;
 function paintWhatsNew() {

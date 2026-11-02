@@ -1,0 +1,7 @@
+{
+  // RSS 中繼（載入超過 iTunes 200 集的舊單集用）。部署：在 worker\ 內跑 npx wrangler deploy
+  "name": "pod-list-feed",
+  "main": "feed.js",
+  "compatibility_date": "2026-09-01",
+  "workers_dev": true
+}

@@ -17,7 +17,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&display=swap">
-<link rel="stylesheet" href="style.css?v=20">
+<link rel="stylesheet" href="style.css?v=21">
 </head>
 <body>
 <div id="ambient" aria-hidden="true"></div>
@@ -58,6 +58,7 @@
       <div id="sortSeg" class="seg" role="tablist" aria-label="時間排序">
         <button role="tab" data-dir="desc">新 → 舊</button><button role="tab" data-dir="asc">舊 → 新</button>
       </div>
+      <button id="btnOlder" class="btn sm" hidden>載入更舊單集</button>
     </div>
     <div id="excl" class="excl"></div>
     <div id="episodes" class="list"></div>
@@ -171,6 +172,6 @@
 <dialog id="sheet"><div id="sheetBody"></div></dialog>
 <div id="toast" hidden></div>
 <audio id="audio" preload="metadata"></audio>
-<script src="app.js?v=20"></script>
+<script src="app.js?v=21"></script>
 </body>
 </html>
