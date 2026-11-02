@@ -68,7 +68,7 @@ function toast(msg) {
 }
 
 /* ---------- 資料 ---------- */
-const BUILD = '21';
+const BUILD = '22';
 const emptyData = () => ({ version: 1, updatedAt: 0, shows: [], lists: [], excludes: {} });   // excludes：{ 節目id: [排除詞] }
 const key = x => String(x && x.id);
 function uniq(arr) {                    // 依 id 去重，保留先出現的
@@ -963,15 +963,15 @@ $('#ver').textContent = BUILD;
 /* 改版提示：版本跟上次勾「不再提示」時不同就在頂端出現提示列；設定頁可隨時再看 */
 const LS_SEEN = 'podlist.seenVer';
 const CHANGES = [
+  { v: '22', date: '2026-11-02', title: '新功能帶你操作一遍', items: [
+    ['改版後自動跳出互動教學', '金框和手指會指出下一步，你自己打字、自己點；隨時可以按「跳過」。'],
+    ['可以再看一次', '設定頁「改版內容」的「互動教學」。']] },
   { v: '21', date: '2026-11-02', title: '可載入 200 集以外的舊單集', items: [
     ['節目頁「載入更舊單集」', '節目超過 200 集時會出現這個按鈕，按下去會把更舊的集數一起列出來，一樣可以篩選、排序、加入清單。'],
     ['已在清單裡的集數不會重複', '舊集如果之前就加過，會直接顯示 ✓。']] },
   { v: '20', date: '2026-10-25', title: '播放順序修正、改版提示', items: [
     ['播放中切換「新 → 舊／舊 → 新」，下一集會跟著新順序', '例如先用新 → 舊開始聽，發現是上下集故事，切到舊 → 新後，按下一集就會播較新的那集。清單頁的「依時間排序」也一樣。'],
     ['改版提示與教學', '有新版本時頂端會出現提示，點進來看最近三版的改動；勾選下方「不再提示」，下次改版前就不會再出現。設定頁最下方也能隨時再看。']] },
-  { v: '19', date: '2026-10-24', title: '找新集加入排除詞', items: [
-    ['找新集多一欄排除詞', '標題含這些詞的集數不列出（多個用逗號分開），會記在這個清單上，下次打開自動帶入。'],
-    ['節目頁的排除詞也會一起套用', '結果上方會顯示「排除詞已擋掉 N 集」。']] }
 ];
 const seenNow = () => localStorage.getItem(LS_SEEN) === BUILD;
 function paintWhatsNew() {
@@ -994,6 +994,132 @@ function openChanges() {
 $('#whatsNew').onclick = openChanges;
 $('#btnChanges').onclick = openChanges;
 paintWhatsNew();
+
+/* 互動教學：改版後自動跳出，在真實頁面上用金框＋手指一步步帶，使用者自己打字、自己點。
+   不鎖畫面、可隨時跳過；要換內容改 TOUR_VER 與 TOUR_STEPS（TOUR_VER 變了才會再跳一次）。 */
+const LS_TOUR = 'podlist.tourVer';
+const TOUR_VER = '22';
+const TOUR_TITLE = '載入更舊單集';
+const shown = el => !!el && el.getClientRects().length > 0;
+let tourOlderSeen = false;
+const TOUR_STEPS = [
+  { target: '#searchForm', text: '自己輸入想聽的節目，再按搜尋。沒想法可以打「從前從前」。',
+    done: () => !!$('#results .item') || !$('#view-show').hidden },
+  { target: '#results .item', text: '點想聽的節目（不一定要點第一個）。',
+    done: () => !$('#view-show').hidden },
+  { target: () => canOlder ? '#btnOlder' : null,
+    text: () => {
+      if (canOlder) return '這個節目超過 200 集。按「載入更舊單集」，把更舊的集數也列出來。';
+      return curEpisodes.length ? '這個節目不到 200 集，不用載入。按左上角返回，換「從前從前」試試。' : '正在載入單集…';
+    },
+    enter: () => { tourOlderSeen = false; },
+    tick: () => { if (canOlder) tourOlderSeen = true; },
+    back: () => $('#view-show').hidden ? 1 : null,
+    done: () => tourOlderSeen && !canOlder },
+  { target: '#btnAddAll', soft: true, text: '完成！看這裡的「全部」，集數變多了。舊集一樣可以篩選、排序、加入清單。', finish: true }
+];
+
+const tour = { i: -1, el: null, timer: 0, raf: 0, root: null };
+function tourBuild() {
+  const px = ['....ooo........', '...owwwo.......', '...owwwo.......', '...owwwo.......', '...owwwo.......', '...owwwoo.o....',
+    '...owwwwwowoo..', '.oooowwwwwwwwo.', 'owwwowwwwwwwwwo', 'owwwwwwwwwwwwwo', 'owwwwwwwwwwwwwo', '.owwwwwwwwwwwwo',
+    '.oppppppppppppo', '..opppppppppoo.', '...oooooooooo..'];
+  const fill = { o: '#111', w: '#fff', p: '#e8ccd2' };
+  const NS = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(NS, 'svg');
+  svg.setAttribute('viewBox', '0 0 15 15');
+  svg.setAttribute('shape-rendering', 'crispEdges');
+  px.forEach((row, y) => [...row].forEach((c, x) => {
+    if (!fill[c]) return;
+    const r = document.createElementNS(NS, 'rect');
+    for (const [k, v] of Object.entries({ x, y, width: 1, height: 1, fill: fill[c] })) r.setAttribute(k, v);
+    svg.append(r);
+  }));
+  const frame = h('div', { class: 'tour-frame' });
+  const hand = h('div', { class: 'tour-hand' }, h('div', { class: 'tour-bob' }, svg));
+  const count = h('small', {});
+  const text = h('div', { class: 'tour-text' });
+  const skip = h('button', { class: 'btn sm', onclick: () => tourEnd(false) }, '跳過');
+  const ok = h('button', { class: 'btn sm primary', hidden: true, onclick: () => tourEnd(true) }, '知道了');
+  const card = h('div', { class: 'tour-card', role: 'status' }, count, text, h('div', { class: 'tour-acts' }, skip, ok));
+  const root = h('div', { id: 'tour' }, frame, hand, card);
+  document.body.append(root);
+  return { root, frame, hand, card, count, text, skip, ok };
+}
+function tourPlace() {
+  tour.raf = requestAnimationFrame(tourPlace);
+  const { frame, hand, card } = tour.root;
+  const el = tour.el;
+  const vv = window.visualViewport;
+  const bottomGap = vv ? Math.max(0, innerHeight - vv.offsetTop - vv.height) : 0;   // 鍵盤升起時卡片要跟著上移
+  if (!shown(el)) {
+    frame.classList.remove('on'); hand.classList.remove('on');
+    card.style.top = 'auto';
+    card.style.bottom = `${bottomGap + 104}px`;
+    return;
+  }
+  const r = el.getBoundingClientRect(), PAD = 5, HAND = 60, TIP = 22, OVER = 8;
+  Object.assign(frame.style, { left: `${r.left - PAD}px`, top: `${r.top - PAD}px`, width: `${r.width + PAD * 2}px`, height: `${r.height + PAD * 2}px` });
+  frame.classList.add('on'); hand.classList.add('on');
+  const below = r.bottom + PAD + HAND + 16 <= innerHeight;
+  hand.classList.toggle('down', !below);
+  const cx = r.left + r.width / 2;
+  hand.style.left = `${below ? Math.min(cx - TIP, innerWidth - HAND - 4) : Math.max(cx - (HAND - TIP), 4)}px`;
+  hand.style.top = `${below ? r.bottom - OVER : r.top - HAND + OVER}px`;
+  // 卡片放目標對面半邊，不擋要點的地方
+  const lower = r.top + r.height / 2 > (vv ? vv.height : innerHeight) / 2;
+  card.style.top = lower ? 'calc(env(safe-area-inset-top, 0px) + 72px)' : 'auto';
+  card.style.bottom = lower ? 'auto' : `${bottomGap + (bottomGap ? 12 : 104)}px`;
+}
+function tourShow(i) {
+  tour.i = i;
+  const s = TOUR_STEPS[i];
+  if (s.enter) s.enter();
+  tour.root.frame.classList.toggle('soft', !!s.soft);
+  tour.root.count.textContent = `v${TOUR_VER} 新功能・${TOUR_TITLE}　${i + 1} / ${TOUR_STEPS.length}`;
+  tour.root.ok.hidden = !s.finish;
+  tour.root.skip.hidden = !!s.finish;
+  tourSync(true);
+}
+function tourSync(first) {
+  const s = TOUR_STEPS[tour.i];
+  const sel = typeof s.target === 'function' ? s.target() : s.target;
+  const el = sel ? $(sel) : null;
+  if (el !== tour.el) {
+    tour.el = el;
+    if (el && shown(el)) el.scrollIntoView({ block: 'nearest' });
+  }
+  const text = typeof s.text === 'function' ? s.text() : s.text;
+  if (first || tour.root.text.textContent !== text) tour.root.text.textContent = text;
+}
+function tourTick() {
+  const s = TOUR_STEPS[tour.i];
+  if (s.tick) s.tick();
+  const back = s.back ? s.back() : null;
+  if (back !== null) return tourShow(back);
+  if (s.done && s.done()) return tourShow(tour.i + 1);
+  tourSync(false);
+}
+function tourStart() {
+  if (tour.root) return;
+  $('#tabs [data-tab=search]').click();
+  // 從設定頁重看時清掉舊結果，才會從自己打字開始
+  $('#q').value = ''; $('#results').replaceChildren(); $('#resultHead').hidden = true;
+  tour.root = tourBuild();
+  tourPlace();
+  tourShow(0);
+  tour.timer = setInterval(tourTick, 150);
+}
+function tourEnd(finished) {
+  clearInterval(tour.timer);
+  cancelAnimationFrame(tour.raf);
+  tour.root.root.remove();
+  tour.root = null; tour.el = null;
+  localStorage.setItem(LS_TOUR, TOUR_VER);
+  if (finished) { localStorage.setItem(LS_SEEN, BUILD); paintWhatsNew(); }
+}
+$('#btnTour').onclick = tourStart;
+if (localStorage.getItem(LS_TOUR) !== TOUR_VER) setTimeout(() => { try { tourStart(); } catch {} }, 900);
 $('#btnReload').onclick = async () => {
   try {
     if ('serviceWorker' in navigator) for (const r of await navigator.serviceWorker.getRegistrations()) await r.unregister();
